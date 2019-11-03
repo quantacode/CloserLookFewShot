@@ -1,6 +1,9 @@
-save_dir                    = '/work/newriver/wyharveychen/CloserLookFewShot/'
+save_dir                    = '/home/rajshekd/projects/FSG/CloserLookFewShot'
 data_dir = {}
 data_dir['CUB']             = './filelists/CUB/' 
 data_dir['miniImagenet']    = './filelists/miniImagenet/' 
 data_dir['omniglot']        = './filelists/omniglot/' 
 data_dir['emnist']          = './filelists/emnist/' 
+data_dir['flowers']          = './filelists/vgg_flower/'
+data_dir['officeProduct']          = './filelists/OfficeHomeDataset_10072016/Product/'
+data_dir['officeClipart']          = './filelists/OfficeHomeDataset_10072016/Clipart/'

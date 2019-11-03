@@ -7,6 +7,8 @@ import math
 import numpy as np
 import torch.nn.functional as F
 from torch.nn.utils.weight_norm import WeightNorm
+from methods.reversal_layer import ReverseLayerF
+
 
 # Basic ResNet model
 
@@ -28,7 +30,8 @@ class distLinear(nn.Module):
             WeightNorm.apply(self.L, 'weight', dim=0) #split the weight update component to direction and norm      
 
         if outdim <=200:
-            self.scale_factor = 2; #a fixed scale factor to scale the output of cos value into a reasonably large input for softmax, for to reproduce the result of CUB with ResNet10, use 4. see the issue#31 in the github 
+            self.scale_factor = 4 #a fixed scale factor to scale the output of cos value into a reasonably large
+            # input for softmax, for to reproduce the result of CUB with ResNet10, use 4. see the issue#31 in the github
         else:
             self.scale_factor = 10; #in omniglot, a larger scale factor is required to handle >1000 output classes.
 
@@ -246,6 +249,38 @@ class BottleneckBlock(nn.Module):
         out = self.relu(out)
         return out
 
+class Discriminator(nn.Module):
+    def __init__(self, n_way):
+        super(Discriminator, self).__init__()
+        # cross
+        self.discriminator = nn.Sequential(
+            nn.Linear(n_way*512, 4096),
+            # nn.Linear(512, 4096),
+            nn.ReLU(True),
+            # nn.Linear(4096, 4096),
+            # nn.ReLU(True),
+            # nn.Linear(128, 128),
+            # nn.ReLU(True),
+			nn.Linear(4096, 2),
+        )
+
+        # # cross_char
+        # self.discriminator = nn.Sequential(
+        # 	# nn.Linear(n_way*64, 512),
+        #     nn.Linear(64, 512),
+        #     # nn.Linear(128, 512),
+        #     nn.ReLU(True),
+        #     nn.Linear(512, 512),
+        #     nn.ReLU(True),
+        # 	nn.Linear(512, 2),
+        # )
+
+    def forward(self, x):
+        xR = ReverseLayerF.apply(x)
+        # xR = x
+        out = self.discriminator(xR)
+        return out
+
 
 class ConvNet(nn.Module):
     def __init__(self, depth, flatten = True):
@@ -371,6 +406,24 @@ class ResNet(nn.Module):
         out = self.trunk(x)
         return out
 
+class ResNet_plus(ResNet):
+    def __init__(self, block,list_of_num_layers, list_of_out_dims, flatten):
+        super(ResNet_plus, self).__init__(block,list_of_num_layers, list_of_out_dims, flatten)
+        self.fc = nn.Sequential(
+            nn.ReLU(),
+            nn.Linear(list_of_out_dims[-1], 1024),
+            nn.ReLU(),
+            nn.Linear(1024, 1024),
+        )
+    def forward(self,x):
+        feat = self.trunk(x)
+        out = self.fc(feat)
+        return out
+
+
+def Disc_model(n_way):
+    return Discriminator(n_way)
+
 def Conv4():
     return ConvNet(4)
 
@@ -395,6 +448,9 @@ def ResNet10( flatten = True):
 def ResNet18( flatten = True):
     return ResNet(SimpleBlock, [2,2,2,2],[64,128,256,512], flatten)
 
+def ResNet18_plus( flatten = True):
+    return ResNet_plus(SimpleBlock, [2,2,2,2],[64,128,256,512], flatten)
+
 def ResNet34( flatten = True):
     return ResNet(SimpleBlock, [3,4,6,3],[64,128,256,512], flatten)
 
@@ -403,6 +459,7 @@ def ResNet50( flatten = True):
 
 def ResNet101( flatten = True):
     return ResNet(BottleneckBlock, [3,4,23,3],[256,512,1024,2048], flatten)
+
 
 
 

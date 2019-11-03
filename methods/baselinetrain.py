@@ -19,7 +19,7 @@ class BaselineTrain(nn.Module):
         self.loss_type = loss_type  #'softmax' #'dist'
         self.num_class = num_class
         self.loss_fn = nn.CrossEntropyLoss()
-        self.DBval = False; #only set True for CUB dataset, see issue #31
+        self.DBval = True; #only set True for CUB dataset, see issue #31
 
     def forward(self,x):
         x    = Variable(x.cuda())
@@ -32,7 +32,7 @@ class BaselineTrain(nn.Module):
         y = Variable(y.cuda())
         return self.loss_fn(scores, y )
     
-    def train_loop(self, epoch, train_loader, optimizer):
+    def train_loop(self, epoch, train_loader, optimizer, writer):
         print_freq = 10
         avg_loss=0
 
@@ -47,14 +47,16 @@ class BaselineTrain(nn.Module):
             if i % print_freq==0:
                 #print(optimizer.state_dict()['param_groups'][0]['lr'])
                 print('Epoch {:d} | Batch {:d}/{:d} | Loss {:f}'.format(epoch, i, len(train_loader), avg_loss/float(i+1)  ))
-                     
-    def test_loop(self, val_loader):
+        # log
+        writer.add_scalar('train/loss', avg_loss/float(i+1), epoch)
+
+    def test_loop(self, val_loader, writer, epoch):
         if self.DBval:
-            return self.analysis_loop(val_loader)
+            return self.analysis_loop(val_loader,  writer, epoch)
         else:
             return -1   #no validation, just save model during iteration
 
-    def analysis_loop(self, val_loader, record = None):
+    def analysis_loop(self, val_loader,  writer, epoch, record = None):
         class_file  = {}
         for i, (x,y) in enumerate(val_loader):
             x = x.cuda()
@@ -71,6 +73,7 @@ class BaselineTrain(nn.Module):
         
         DB = DBindex(class_file)
         print('DB index = %4.2f' %(DB))
+        writer.add_scalar('test/DB_index', DB, epoch)
         return 1/DB #DB index: the lower the better
 
 def DBindex(cl_data_file):

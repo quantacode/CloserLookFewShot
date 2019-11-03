@@ -29,3 +29,14 @@ def sparsity(cl_data_file):
         cl_sparsity.append(np.mean([np.sum(x!=0) for x in cl_data_file[cl] ])  ) 
 
     return np.mean(cl_sparsity) 
+
+def load_model(model, loadpth):
+    model_state_dict = model.state_dict()
+    pretr_dict = torch.load(loadpth)['state']
+    pretr_dict = {k: v for k, v in pretr_dict.items() if k in model_state_dict}
+    model_state_dict.update(pretr_dict)
+    model.load_state_dict(model_state_dict)
+    return model
+
+
+    

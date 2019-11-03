@@ -96,6 +96,7 @@ if __name__ == '__main__':
         checkpoint_dir += '_aug'
     if not params.method in ['baseline', 'baseline++'] :
         checkpoint_dir += '_%dway_%dshot' %( params.train_n_way, params.n_shot)
+    checkpoint_dir += '/%s' % (params.exp_id)
 
     #modelfile   = get_resume_file(checkpoint_dir)
 
@@ -105,8 +106,11 @@ if __name__ == '__main__':
         else:
             modelfile   = get_best_file(checkpoint_dir)
         if modelfile is not None:
-            tmp = torch.load(modelfile)
-            model.load_state_dict(tmp['state'])
+            model_state_dict = model.state_dict()
+            pretr_dict = torch.load(modelfile)
+            pretr_dict = {k: v for k, v in pretr_dict.items() if k in model_state_dict}
+            model_state_dict.update(pretr_dict)
+            model.load_state_dict(model_state_dict)
 
     split = params.split
     if params.save_iter != -1:
@@ -133,8 +137,8 @@ if __name__ == '__main__':
             if split == 'base':
                 loadfile = configs.data_dir['omniglot'] + 'noLatin.json' 
             else:
-                loadfile  = configs.data_dir['emnist'] + split +'.json' 
-        else: 
+                loadfile  = configs.data_dir['emnist'] + split +'.json'
+        else:
             loadfile    = configs.data_dir[params.dataset] + split + '.json'
 
         novel_loader     = datamgr.get_data_loader( loadfile, aug = False)
@@ -156,7 +160,9 @@ if __name__ == '__main__':
         acc_std  = np.std(acc_all)
         print('%d Test Acc = %4.2f%% +- %4.2f%%' %(iter_num, acc_mean, 1.96* acc_std/np.sqrt(iter_num)))
     with open('./record/results.txt' , 'a') as f:
-        timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime()) 
+        # import ipdb
+        # ipdb.set_trace()
+        timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
         aug_str = '-aug' if params.train_aug else ''
         aug_str += '-adapted' if params.adaptation else ''
         if params.method in ['baseline', 'baseline++'] :

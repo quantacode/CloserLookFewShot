@@ -15,7 +15,7 @@ from methods.matchingnet import MatchingNet
 from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file, get_best_file, get_assigned_file 
-
+import ipdb
 
 def save_features(model, data_loader, outfile ):
     f = h5py.File(outfile, 'w')
@@ -64,17 +64,25 @@ if __name__ == '__main__':
             loadfile   = configs.data_dir['CUB'] + split +'.json' 
     elif params.dataset == 'cross_char':
         if split == 'base':
-            loadfile = configs.data_dir['omniglot'] + 'noLatin.json' 
+            loadfile = configs.data_dir['omniglot'] + 'noLatin.json'
         else:
-            loadfile  = configs.data_dir['emnist'] + split +'.json' 
+            loadfile = configs.data_dir['emnist'] + split + '.json'
+    elif params.dataset == 'CUB_flowers' or params.dataset == 'miniImagenet_flowers':
+        loadfile = configs.data_dir['flowers'] + split + '.json'
+    elif params.dataset == 'flowers_CUB':
+        loadfile   = configs.data_dir['CUB'] + split +'.json'
+    elif params.dataset == 'product_clipart':
+        loadfile   = configs.data_dir['officeClipart'] + split +'.json'
     else:
         loadfile = configs.data_dir[params.dataset] + split + '.json'
+    print("evaluating on : ", loadfile)
 
     checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model, params.method)
     if params.train_aug:
         checkpoint_dir += '_aug'
     if not params.method in ['baseline', 'baseline++'] :
         checkpoint_dir += '_%dway_%dshot' %( params.train_n_way, params.n_shot)
+    checkpoint_dir += '/%s' % (params.exp_id)
 
     if params.save_iter != -1:
         modelfile   = get_assigned_file(checkpoint_dir,params.save_iter)
