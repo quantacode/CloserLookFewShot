@@ -1,0 +1,8 @@
+*.swo
+/filelist
+/logs
+/trained_models
+*.pyc
+*.DS_Store
+*__pycache__
+
