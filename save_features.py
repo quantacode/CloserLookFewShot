@@ -94,7 +94,7 @@ if __name__ == '__main__':
     if params.save_iter != -1:
         outfile = os.path.join( checkpoint_dir.replace("checkpoints","features"), split + "_" + str(params.save_iter)+ ".hdf5") 
     else:
-        outfile = os.path.join( checkpoint_dir.replace("checkpoints","features"), split + ".hdf5") 
+        outfile = os.path.join( checkpoint_dir.replace("checkpoints","features"), split + ".hdf5")
 
     datamgr         = SimpleDataManager(image_size, batch_size = 64)
     data_loader      = datamgr.get_data_loader(loadfile, aug = False)

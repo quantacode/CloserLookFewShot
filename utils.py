@@ -38,5 +38,14 @@ def load_model(model, loadpth):
     model.load_state_dict(model_state_dict)
     return model
 
+def load_pretrImagenet(model, loadpth):
+    model_state_dict = model.state_dict()
+    pretr_state_dict = torch.load(loadpth)['state']
+    keylist_model = list(model_state_dict.keys())
+    keylist_pretr = list(pretr_state_dict.keys())
+    pretr_dict = {keylist_model[i]: pretr_state_dict[keylist_pretr[i]] for i in range(len(keylist_model))}
+    model_state_dict.update(pretr_dict)
+    model.load_state_dict(model_state_dict)
+    return model
 
     

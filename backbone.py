@@ -1,4 +1,4 @@
-# This code is modified from https://github.com/facebookresearch/low-shot-shrink-hallucinate
+ # This code is modified from https://github.com/facebookresearch/low-shot-shrink-hallucinate
 
 import torch
 from torch.autograd import Variable

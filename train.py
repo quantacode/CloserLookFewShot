@@ -20,7 +20,7 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from tensorboardX import SummaryWriter
 from io_utils import model_dict, parse_args, get_resume_file
-from utils import load_model
+from utils import load_model, load_pretrImagenet
 
 def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch, params, writer):
 
@@ -34,7 +34,8 @@ def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch,
     for epoch in range(start_epoch,stop_epoch):
         model.train()
         if params.adversarial:
-            model.train_loop_adversarial(epoch, base_loader, optimizer, writer)  # model are called by reference,
+            model.train_loop_adversarial(epoch, base_loader, optimizer, writer, params=params)  # model are called by
+            # reference,
             # no need to
         else:
             model.train_loop(epoch, base_loader,  optimizer,writer, params=params ) #model are called by reference,
@@ -155,17 +156,19 @@ if __name__=='__main__':
         train_few_shot_params    = dict(n_way = params.train_n_way, n_support = params.n_shot)
         base_datamgr            = SetDataManager(image_size, n_query = n_query,  **train_few_shot_params)
         base_loader             = base_datamgr.get_data_loader( base_file , aug = params.train_aug )
+        if params.n_shot_test == -1: # modify val loader support
+            params.n_shot_test =  params.n_shot
+        else: # modify target loader support
+            train_few_shot_params['n_support'] = params.n_shot_test
         if params.adversarial:
             target_datamgr = SetDataManager(image_size, n_query = n_query,  **train_few_shot_params)
-            target_loader = target_datamgr.get_data_loader(novel_file , aug = False )
+            target_loader = target_datamgr.get_data_loader(novel_file , aug = False)
             # ipdb.set_trace()
             # bl, tl = iter(base_loader), iter(target_loader)
             # bx, _ = next(bl)
             # tx, _ = next(tl)
             base_loader = [base_loader, target_loader]
 
-        if params.n_shot_test == -1:
-            params.n_shot_test =  params.n_shot
         test_few_shot_params     = dict(n_way = params.test_n_way, n_support = params.n_shot_test)
         val_datamgr             = SetDataManager(image_size, n_query = n_query, **test_few_shot_params)
         val_loader              = val_datamgr.get_data_loader( val_file, aug = False)
@@ -203,14 +206,17 @@ if __name__=='__main__':
                 model.train_lr = 0.1
         # pre_train or warm start
         if params.load_modelpth:
-            model = load_model(model, params.load_modelpth)
+            if 'pretrained-imagenet' in params.load_modelpth:
+                model = load_pretrImagenet(model, params.load_modelpth)
+            else:
+                model = load_model(model, params.load_modelpth)
+            print('preloading: ', params.load_modelpth)
     else:
         raise ValueError('Unknown method')
 
     model = model.cuda()
 
-    params.checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model,
-                                                           params.method)
+    params.checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model, params.method)
     if params.train_aug:
         params.checkpoint_dir += '_aug'
     if not params.method  in ['baseline', 'baseline++']:

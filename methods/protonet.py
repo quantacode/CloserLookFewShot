@@ -33,10 +33,10 @@ class ProtoNet(MetaTemplate):
         scores = -dists
 
         if is_adversarial:
-            # SeparateZ
-            z_set = z_support.view(-1, z_support.shape[-1])
-            # # ConcatZ
-            # z_set = z_proto.view(-1).unsqueeze(0)
+            # # SeparateZ
+            # z_set = z_support.view(-1, z_support.shape[-1])
+            # ConcatZ
+            z_set = z_proto.view(-1).unsqueeze(0)
             # # AvgZ
             # z_set = z_proto.mean(dim=0).unsqueeze(0)
             return scores, z_set
@@ -49,7 +49,7 @@ class ProtoNet(MetaTemplate):
         loss = ls+lt
         return loss
 
-    def set_forward_loss(self, xS, xT=None):
+    def set_forward_loss(self, xS, xT=None, params = None):
         y_query = torch.from_numpy(np.repeat(range( self.n_way ), self.n_query ))
         # y_query = Variable(y_query.cuda())
         y_query = y_query.cuda()
@@ -58,6 +58,8 @@ class ProtoNet(MetaTemplate):
         proto_loss = self.loss_fn(scores, y_query )
 
         if self.discriminator is not None:
+            if params:
+                if params.n_shot_test != -1: self.n_support=params.n_shot_test
             _, z_target = self.set_forward(xT, is_adversarial=True)
             adverasrial_loss = self.discriminator_score(z_source, z_target, self.adv_loss_fn)
             domain_reg = 0.1

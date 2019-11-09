@@ -69,7 +69,7 @@ class MetaTemplate(nn.Module):
         top1_correct = np.sum(topk_ind[:,0] == y_query)
         return float(top1_correct), len(y_query)
 
-    def train_loop_adversarial(self, epoch, train_loaders, optimizer, writer):
+    def train_loop_adversarial(self, epoch, train_loaders, optimizer, writer, params=None):
         print_freq = 10
 
         tl_source = iter(train_loaders[0])
@@ -86,15 +86,16 @@ class MetaTemplate(nn.Module):
             # Note : Temp hack since couldnt find why subsampler works differently for source and target
             # command to check: tl_source.dataset.sub_dataloader[-1].batch_sampler.sampler.num_samples
 
-            # if cross_char, need to adjust the shape of target
-            x_target = x_target[:, :x_source.shape[1], :, :, :]
-
+            # # if cross_char, need to adjust the shape of target
+            # x_target = x_target[:, :x_source.shape[1], :, :, :]
             self.n_query = x_source.size(1) - self.n_support
+
             if self.change_way:
-                self.n_way  = x_source.size(0)
+                self.n_way = x.size(0)
+
             optimizer.zero_grad()
 
-            loss, lossP, lossAdv = self.set_forward_loss( x_source, x_target )
+            loss, lossP, lossAdv = self.set_forward_loss( x_source, x_target, params=params)
             loss.backward()
             optimizer.step()
             # ipdb.set_trace()
@@ -116,8 +117,9 @@ class MetaTemplate(nn.Module):
         writer.add_scalar('train/loss', mean_loss, epoch)
         writer.add_scalar('train/loss primary', mean_lossP, epoch)
         writer.add_scalar('train/loss adversarial', mean_lossAdv, epoch)
-        log_images(x_source, 'train/source', epoch, writer)
-        log_images(x_target, 'train/target', epoch, writer)
+        if epoch==2:
+            log_images(x_source, 'train/source', epoch, writer)
+            log_images(x_target, 'train/target', epoch, writer)
 
     def train_loop(self, epoch, train_loader, optimizer, writer, params = None):
         print_freq = 10
@@ -144,8 +146,9 @@ class MetaTemplate(nn.Module):
                 print('Epoch {:d} | Batch {:d}/{:d} | Loss {:f}'.format(epoch, i, len(train_loader), mean_loss))
         # log
         writer.add_scalar('train/loss', mean_loss, epoch)
-        log_images(x[:, :self.n_support,:,:,:], 'train/support_set', epoch, writer)
-        log_images(x[:, self.n_support:,:,:,:], 'train/query_set', epoch, writer)
+        if epoch==2:
+            log_images(x[:, :self.n_support,:,:,:], 'train/support_set', epoch, writer)
+            log_images(x[:, self.n_support:,:,:,:], 'train/query_set', epoch, writer)
 
 
     def test_loop(self, test_loader, writer, epoch, params , record = None):
@@ -170,8 +173,9 @@ class MetaTemplate(nn.Module):
         print('%d Test Acc = %4.2f%% +- %4.2f%%' %(iter_num,  acc_mean, 1.96* acc_std/np.sqrt(iter_num)))
         # log
         writer.add_scalar('test/accuracy', acc_mean, epoch)
-        log_images(x[:, :self.n_support,:,:,:], 'test/support_set', epoch, writer)
-        log_images(x[:, self.n_support:,:,:,:], 'test/query_set', epoch, writer)
+        if np.mod(epoch,100)==0:
+            log_images(x[:, :self.n_support,:,:,:], 'test/support_set', epoch, writer)
+            log_images(x[:, self.n_support:,:,:,:], 'test/query_set', epoch, writer)
         return acc_mean
 
     def set_forward_adaptation(self, x, is_feature = True): #further adaptation, default is fixing feature and train a new softmax clasifier
