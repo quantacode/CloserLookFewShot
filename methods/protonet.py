@@ -58,9 +58,13 @@ class ProtoNet(MetaTemplate):
         proto_loss = self.loss_fn(scores, y_query )
 
         if self.discriminator is not None:
-            if params:
-                if params.n_shot_test != -1: self.n_support=params.n_shot_test
-            _, z_target = self.set_forward(xT, is_adversarial=True)
+            if params and params.n_shot_test != -1:
+                self.n_support=params.n_shot_test
+                _, z_target = self.set_forward(xT, is_adversarial=True)
+                self.n_support=params.n_shot
+            else:
+                _, z_target = self.set_forward(xT, is_adversarial=True)
+
             adverasrial_loss = self.discriminator_score(z_source, z_target, self.adv_loss_fn)
             domain_reg = 0.1
             loss = proto_loss + domain_reg*adverasrial_loss

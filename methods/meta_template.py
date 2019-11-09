@@ -91,7 +91,7 @@ class MetaTemplate(nn.Module):
             self.n_query = x_source.size(1) - self.n_support
 
             if self.change_way:
-                self.n_way = x.size(0)
+                self.n_way = x_source.size(0)
 
             optimizer.zero_grad()
 
@@ -126,9 +126,6 @@ class MetaTemplate(nn.Module):
         avg_loss = 0
 
         for i, (x,_ ) in enumerate(train_loader):
-            if params.n_shot_test != -1:
-                # to nullify the modification made at test time
-                self.n_support = params.n_shot
             if self.change_way:
                 self.n_way  = x.size(0)
 
@@ -156,10 +153,10 @@ class MetaTemplate(nn.Module):
         count = 0
         acc_all = []
 
-        iter_num = len(test_loader) 
+        if params.n_shot_test != -1:
+            self.n_support = params.n_shot_test
+        iter_num = len(test_loader)
         for i, (x,_) in enumerate(test_loader):
-            if params.n_shot_test != -1:
-                self.n_support = params.n_shot_test
             if self.change_way:
                 self.n_way  = x.size(0)
 
@@ -176,6 +173,8 @@ class MetaTemplate(nn.Module):
         if np.mod(epoch,100)==0:
             log_images(x[:, :self.n_support,:,:,:], 'test/support_set', epoch, writer)
             log_images(x[:, self.n_support:,:,:,:], 'test/query_set', epoch, writer)
+        if params.n_shot_test != -1: # reverse the effect of changing shots in the beginning
+            self.n_support = params.n_shot
         return acc_mean
 
     def set_forward_adaptation(self, x, is_feature = True): #further adaptation, default is fixing feature and train a new softmax clasifier
