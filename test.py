@@ -53,9 +53,9 @@ if __name__ == '__main__':
 
     few_shot_params = dict(n_way = params.test_n_way , n_support = params.n_shot) 
 
-    if params.dataset in ['omniglot', 'cross_char']:
-        assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
-        params.model = 'Conv4S'
+    # if params.dataset in ['omniglot', 'cross_char']:
+    #     assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
+    #     params.model = 'Conv4S'
 
     if params.method == 'baseline':
         model           = BaselineFinetune( model_dict[params.model], **few_shot_params )

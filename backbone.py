@@ -1,4 +1,4 @@
- # This code is modified from https://github.com/facebookresearch/low-shot-shrink-hallucinate
+# This code is modified from https://github.com/facebookresearch/low-shot-shrink-hallucinate
 
 import torch
 from torch.autograd import Variable
@@ -255,6 +255,7 @@ class Discriminator(nn.Module):
         # cross
         self.discriminator = nn.Sequential(
             nn.Linear(n_way*512, 4096),
+            # nn.Linear(n_way*64, 4096),
             # nn.Linear(512, 4096),
             nn.ReLU(True),
             # nn.Linear(4096, 4096),
@@ -263,6 +264,7 @@ class Discriminator(nn.Module):
             # nn.ReLU(True),
 			nn.Linear(4096, 2),
         )
+        self.wt = nn.Linear(1,1, bias=False)
 
         # # cross_char
         # self.discriminator = nn.Sequential(

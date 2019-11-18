@@ -52,14 +52,15 @@ if __name__ == '__main__':
     else:
         image_size = 224
 
-    if params.dataset in ['omniglot', 'cross_char']:
-        assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
-        params.model = 'Conv4S'
+    # if params.dataset in ['omniglot', 'cross_char']:
+    #     assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
+    #     params.model = 'Conv4S'
 
     split = params.split
     if params.dataset == 'cross':
         if split == 'base':
-            loadfile = configs.data_dir['miniImagenet'] + 'all.json' 
+            # loadfile = configs.data_dir['miniImagenet'] + 'all.json'
+            loadfile = configs.data_dir['CUB'] + 'base.json'
         else:
             loadfile   = configs.data_dir['CUB'] + split +'.json' 
     elif params.dataset == 'cross_char':

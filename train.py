@@ -38,14 +38,20 @@ def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch,
             # reference,
             # no need to
         else:
-            model.train_loop(epoch, base_loader,  optimizer,writer, params=params ) #model are called by reference,
+            if params.method == 'maml':
+                model.train_loop(epoch, base_loader,  optimizer) #model are called by reference,
+            else:
+                model.train_loop(epoch, base_loader,  optimizer,writer, params=params ) #model are called by reference,
             # no need to return return
         model.eval()
 
         if not os.path.isdir(params.checkpoint_dir):
             os.makedirs(params.checkpoint_dir)
 
-        acc = model.test_loop( val_loader, writer, epoch, params=params)
+        if params.method == 'maml':
+            acc = model.test_loop( val_loader)
+        else:
+            acc = model.test_loop( val_loader, writer, epoch, params=params)
         if acc > max_acc : #for baseline and baseline++, we don't use validation in default and we let acc = -1, but we allow options to validate with DB index
             print("best model! save...")
             max_acc = acc
@@ -67,7 +73,8 @@ if __name__=='__main__':
         base_file = configs.data_dir['miniImagenet'] + 'all.json'
         val_file   = configs.data_dir['CUB'] + 'val.json'
         if params.adversarial:
-            novel_file  = configs.data_dir['CUB'] + 'novel' +'.json'
+            # novel_file  = configs.data_dir['CUB'] + 'novel' +'.json'
+            novel_file  = configs.data_dir['CUB'] + 'base' +'.json'
     elif params.dataset == 'cross_char':
         base_file = configs.data_dir['omniglot'] + 'noLatin.json'
         val_file   = configs.data_dir['emnist'] + 'val.json'
@@ -103,14 +110,16 @@ if __name__=='__main__':
     if 'Conv' in params.model:
         if params.dataset in ['omniglot', 'cross_char', 'flowers', 'flowers_CUB']:
             image_size = 28
+        elif params.dataset in ['CUB_flowers']:
+            image_size = 48
         else:
             image_size = 84
     else:
         image_size = 224
 
-    if params.dataset in ['omniglot', 'cross_char']:
-        assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
-        params.model = 'Conv4S'
+    # if params.dataset in ['omniglot', 'cross_char']:
+    #     assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
+    #     params.model = 'Conv4S'
 
     optimization = 'Adam'
 

@@ -118,17 +118,17 @@ class MetaTemplate(nn.Module):
         writer.add_scalar('train/loss primary', mean_lossP, epoch)
         writer.add_scalar('train/loss adversarial', mean_lossAdv, epoch)
         if epoch==2:
-            log_images(x_source[:, :x_source.size(1)-self.n_query, :, :, :], 'train/source/support_set', epoch, writer)
-            log_images(x_source[:, x_source.size(1)-self.n_query:, :, :, :], 'train/source/query_set', epoch, writer)
-            log_images(x_target[:, :x_target.size(1)-self.n_query, :, :, :], 'train/target/support_set', epoch, writer)
-            log_images(x_target[:, x_target.size(1)-self.n_query:, :, :, :], 'train/target/query_set', epoch, writer)
-
+            log_images(x_source, 'train/source', epoch, writer)
+            log_images(x_target, 'train/target', epoch, writer)
 
     def train_loop(self, epoch, train_loader, optimizer, writer, params = None):
         print_freq = 10
         avg_loss = 0
 
         for i, (x,_ ) in enumerate(train_loader):
+            if params.n_shot_test != -1:
+                # to nullify the modification made at test time
+                self.n_support = params.n_shot
             if self.change_way:
                 self.n_way  = x.size(0)
 
@@ -156,10 +156,10 @@ class MetaTemplate(nn.Module):
         count = 0
         acc_all = []
 
-        if params.n_shot_test != -1:
-            self.n_support = params.n_shot_test
-        iter_num = len(test_loader)
+        iter_num = len(test_loader) 
         for i, (x,_) in enumerate(test_loader):
+            if params.n_shot_test != -1:
+                self.n_support = params.n_shot_test
             if self.change_way:
                 self.n_way  = x.size(0)
 
@@ -176,8 +176,6 @@ class MetaTemplate(nn.Module):
         if np.mod(epoch,100)==0:
             log_images(x[:, :self.n_support,:,:,:], 'test/support_set', epoch, writer)
             log_images(x[:, self.n_support:,:,:,:], 'test/query_set', epoch, writer)
-        if params.n_shot_test != -1: # reverse the effect of changing shots in the beginning
-            self.n_support = params.n_shot
         return acc_mean
 
     def set_forward_adaptation(self, x, is_feature = True): #further adaptation, default is fixing feature and train a new softmax clasifier

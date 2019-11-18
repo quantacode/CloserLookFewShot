@@ -1,7 +1,14 @@
 *.swo
-/filelist
-/logs
-/trained_models
+./filelists
+./logs
+./trained_models
+./checkpoints
+./data
+./features
+./record
+run_me.sh
+configs.py
+*.json
 *.pyc
 *.DS_Store
 *__pycache__

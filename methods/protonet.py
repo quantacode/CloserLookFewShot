@@ -1,4 +1,4 @@
-# This code is modified from https://github.com/jakesnell/prototypical-networks 
+# This code is modified from https://github.com/jakesnell/prototypical-networks
 
 import backbone
 import torch
@@ -35,15 +35,14 @@ class ProtoNet(MetaTemplate):
         if is_adversarial:
             # # SeparateZ
             # z_set = z_support.view(-1, z_support.shape[-1])
-
-            # # ConcatZ
-            # z_set = z_proto.view(-1).unsqueeze(0)
-
+            # ConcatZ
+            z_set = z_proto.view(-1).unsqueeze(0)
             # # AvgZ
             # z_set = z_proto.mean(dim=0).unsqueeze(0)
 
-            # ConcatZ Random Sample
-            z_set = z_support[:,torch.randint(z_support.shape[1],(1,)).item(),:].reshape(-1).unsqueeze(0)
+            # # ConcatZ Random Sample
+            # z_set = z_support[:, torch.randint(z_support.shape[1], (1,)).item(), :].reshape(-1).unsqueeze(0)
+
             return scores, z_set
         else:
             return scores
@@ -53,7 +52,11 @@ class ProtoNet(MetaTemplate):
         logitT = self.discriminator(zT)
         ls = adv_loss_fn(logitS, torch.ones(zS.shape[0], dtype=torch.long).cuda())
         lt = adv_loss_fn(logitT, torch.zeros(zT.shape[0], dtype=torch.long).cuda())
-        loss = ls + lt
+        loss = ls+lt
+
+        # SPL: reweighting of loss
+        corr = torch.dot((zS / torch.norm(zS)).squeeze(), (zT / torch.norm(zT)).squeeze()).unsqueeze(0)
+        wt = torch.norm(corr)
 
         # # Tanh curriculum
         # assert (epoch!=None)
@@ -61,9 +64,6 @@ class ProtoNet(MetaTemplate):
         # scale = epoch/50.0
         # wt = torch.norm(F.tanh(scale*corr))
 
-        # SPL
-        corr = torch.dot((zS / torch.norm(zS)).squeeze(), (zT / torch.norm(zT)).squeeze()).unsqueeze(0)
-        wt = torch.norm(corr)
 
         ## PaIR
 
@@ -79,7 +79,7 @@ class ProtoNet(MetaTemplate):
         # scale = epoch / 100.0
         # wt = torch.norm(F.tanh(scale*corr))
 
-        return wt * loss
+        return wt*loss
         # return loss
 
     def set_forward_loss(self, xS, xT=None, params = None, epoch=None):
@@ -91,13 +91,9 @@ class ProtoNet(MetaTemplate):
         proto_loss = self.loss_fn(scores, y_query )
 
         if self.discriminator is not None:
-            if params and params.n_shot_test != -1:
-                self.n_support=params.n_shot_test
-                _, z_target = self.set_forward(xT, is_adversarial=True)
-                self.n_support=params.n_shot
-            else:
-                _, z_target = self.set_forward(xT, is_adversarial=True)
-
+            if params:
+                if params.n_shot_test != -1: self.n_support=params.n_shot_test
+            _, z_target = self.set_forward(xT, is_adversarial=True)
             adverasrial_loss = self.discriminator_score(z_source, z_target, self.adv_loss_fn, epoch)
             domain_reg = 1.0
             loss = proto_loss + domain_reg*adverasrial_loss
