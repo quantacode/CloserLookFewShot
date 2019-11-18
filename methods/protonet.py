@@ -35,21 +35,54 @@ class ProtoNet(MetaTemplate):
         if is_adversarial:
             # # SeparateZ
             # z_set = z_support.view(-1, z_support.shape[-1])
-            # ConcatZ
-            z_set = z_proto.view(-1).unsqueeze(0)
+
+            # # ConcatZ
+            # z_set = z_proto.view(-1).unsqueeze(0)
+
             # # AvgZ
             # z_set = z_proto.mean(dim=0).unsqueeze(0)
+
+            # ConcatZ Random Sample
+            z_set = z_support[:,torch.randint(z_support.shape[1],(1,)).item(),:].reshape(-1).unsqueeze(0)
             return scores, z_set
         else:
             return scores
 
-    def discriminator_score(self, zS, zT, adv_loss_fn):
-        ls = adv_loss_fn(self.discriminator(zS), torch.ones(zS.shape[0], dtype=torch.long).cuda())
-        lt = adv_loss_fn(self.discriminator(zT), torch.zeros(zT.shape[0], dtype=torch.long).cuda())
-        loss = ls+lt
-        return loss
+    def discriminator_score(self, zS, zT, adv_loss_fn, epoch):
+        logitS = self.discriminator(zS)
+        logitT = self.discriminator(zT)
+        ls = adv_loss_fn(logitS, torch.ones(zS.shape[0], dtype=torch.long).cuda())
+        lt = adv_loss_fn(logitT, torch.zeros(zT.shape[0], dtype=torch.long).cuda())
+        loss = ls + lt
 
-    def set_forward_loss(self, xS, xT=None, params = None):
+        # # Tanh curriculum
+        # assert (epoch!=None)
+        # corr = torch.dot((zS/torch.norm(zS)).squeeze(), (zT/torch.norm(zT)).squeeze()).unsqueeze(0)
+        # scale = epoch/50.0
+        # wt = torch.norm(F.tanh(scale*corr))
+
+        # SPL
+        corr = torch.dot((zS / torch.norm(zS)).squeeze(), (zT / torch.norm(zT)).squeeze()).unsqueeze(0)
+        wt = torch.norm(corr)
+
+        ## PaIR
+
+        # # euclidean
+        # dist = torch.norm((zS-zT).squeeze(), 2).unsqueeze(0)
+        # scale = 0.1
+        # wt = torch.exp(-dist.detach()/(scale*(epoch+1)))
+
+        # # # disc scores
+        # scoreS = 2*F.relu(F.softmax(logitS)[:,1]-0.5)
+        # scoreT = 2*F.relu(F.softmax(logitT)[:,0]-0.5)
+        # corr = 1 / (0.00001+scoreS * scoreT) -1
+        # scale = epoch / 100.0
+        # wt = torch.norm(F.tanh(scale*corr))
+
+        return wt * loss
+        # return loss
+
+    def set_forward_loss(self, xS, xT=None, params = None, epoch=None):
         y_query = torch.from_numpy(np.repeat(range( self.n_way ), self.n_query ))
         # y_query = Variable(y_query.cuda())
         y_query = y_query.cuda()
@@ -65,8 +98,8 @@ class ProtoNet(MetaTemplate):
             else:
                 _, z_target = self.set_forward(xT, is_adversarial=True)
 
-            adverasrial_loss = self.discriminator_score(z_source, z_target, self.adv_loss_fn)
-            domain_reg = 0.1
+            adverasrial_loss = self.discriminator_score(z_source, z_target, self.adv_loss_fn, epoch)
+            domain_reg = 1.0
             loss = proto_loss + domain_reg*adverasrial_loss
             return loss, proto_loss, adverasrial_loss
         else:

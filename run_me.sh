@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -x
 source ~/torch/bin/activate
+ 
 
 ################################# Within Dataset #############################################
 ############## omniglot ##########
@@ -170,11 +171,11 @@ python ./train.py --train_aug \
 --model ResNet10 \
 --method protonet \
 --stop_epoch 10000 \
---lr 0.001 \
+--lr 0.0001 \
 --adversarial \
---n_shot 10 --n_shot_test 1 \
---load_modelpth '/home/rajshekd/projects/FSG/CloserLookFewShot/checkpoints/CUB_flowers/ResNet10_protonet_aug_5way_10shot/vanila_shot-10to1/best_model.tar' \
---exp_id 'adversarial_10to1'
+--n_shot 10 --n_shot_test 2 \
+--load_modelpth '/home/rajshekd/projects/FSG/CloserLookFewShot/checkpoints/CUB_flowers/ResNet10_protonet_aug_5way_10shot/vanila_shot-10to2/best_model.tar' \
+--exp_id 'adversarial-10to2_ConcatZ-RandSamp_domainReg-1.0_lr-0.0001_DiscM-4096_Base2Base_SPL'
 
 ################# Office Home ##############
 ## no-adapt
@@ -200,6 +201,6 @@ python ./train.py --train_aug \
 
 
 ################################# EVALUATE #############################################
-#python save_features.py --dataset omniglot --model Conv4 --method protonet --exp_id 'vanila'
+#python save_features.py --train_aug --dataset product_clipart --model ResNet18 --method protonet --exp_id 'adversarial-ConcatZ_domainReg-0.1_lr-0.001_DiscM-4096_betterWarmStart'
 #
-#python test.py --dataset omniglot --model Conv4 --method protonet --exp_id 'vanila'
+#python test.py --train_aug --dataset product_clipart --model ResNet18 --method protonet --exp_id 'adversarial-ConcatZ_domainReg-0.1_lr-0.001_DiscM-4096_betterWarmStart'

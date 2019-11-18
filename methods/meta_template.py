@@ -95,7 +95,7 @@ class MetaTemplate(nn.Module):
 
             optimizer.zero_grad()
 
-            loss, lossP, lossAdv = self.set_forward_loss( x_source, x_target, params=params)
+            loss, lossP, lossAdv = self.set_forward_loss( x_source, x_target, params=params, epoch=epoch)
             loss.backward()
             optimizer.step()
             # ipdb.set_trace()
@@ -118,8 +118,11 @@ class MetaTemplate(nn.Module):
         writer.add_scalar('train/loss primary', mean_lossP, epoch)
         writer.add_scalar('train/loss adversarial', mean_lossAdv, epoch)
         if epoch==2:
-            log_images(x_source, 'train/source', epoch, writer)
-            log_images(x_target, 'train/target', epoch, writer)
+            log_images(x_source[:, :x_source.size(1)-self.n_query, :, :, :], 'train/source/support_set', epoch, writer)
+            log_images(x_source[:, x_source.size(1)-self.n_query:, :, :, :], 'train/source/query_set', epoch, writer)
+            log_images(x_target[:, :x_target.size(1)-self.n_query, :, :, :], 'train/target/support_set', epoch, writer)
+            log_images(x_target[:, x_target.size(1)-self.n_query:, :, :, :], 'train/target/query_set', epoch, writer)
+
 
     def train_loop(self, epoch, train_loader, optimizer, writer, params = None):
         print_freq = 10

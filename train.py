@@ -82,7 +82,8 @@ if __name__=='__main__':
         base_file = configs.data_dir['CUB'] + 'base.json'
         val_file   = configs.data_dir['flowers'] + 'val.json'
         if params.adversarial:
-            novel_file  = configs.data_dir['flowers'] + 'base_novel.json'
+            # novel_file  = configs.data_dir['flowers'] + 'base_novel.json'
+            novel_file  = configs.data_dir['flowers'] + 'base.json'
     elif params.dataset == 'miniImagenet_flowers':
         base_file = configs.data_dir['miniImagenet'] + 'all.json'
         val_file   = configs.data_dir['flowers'] + 'val.json'
