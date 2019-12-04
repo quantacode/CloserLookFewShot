@@ -30,6 +30,10 @@ def parse_args(script):
                                                                           'same as n_support but in test') #baseline and # baseline++ only use this parameter in finetuning
     parser.add_argument('--train_aug'   , action='store_true',  help='perform data augmentation or not during training ') #still required for save_features.py and test.py to find the model path correctly
     parser.add_argument('--adversarial'   , action='store_true',  help='adversarial learning') #still required for
+    parser.add_argument('--adaptFinetune'   , action='store_true',  help='adaptive finetuning (DA baseline)')
+    parser.add_argument('--dan'   , action='store_true',  help='DAN')
+    #still
+    # required for
     parser.add_argument('--cosine'   , action='store_true',  help='use cosine metric')
     # save_features.py and test.py to find the model path correctly
 
@@ -38,6 +42,8 @@ def parse_args(script):
         parser.add_argument('--save_freq'   , default=50, type=int, help='Save frequency')
         parser.add_argument('--start_epoch' , default=0, type=int,help ='Starting epoch')
         parser.add_argument('--stop_epoch'  , default=-1, type=int, help ='Stopping epoch') #for meta-learning methods,
+        parser.add_argument('--gamma'  , default=0.1, type=float, help ='relative weighting of proto and adv '
+                                                                             'losses')
         parser.add_argument('--lr'  , default=-1, type=float, help ='Learning rate') #for meta-learning methods,
         # each epoch contains 100 episodes. The default epoch number is dataset dependent. See train.py
         parser.add_argument('--resume'      , action='store_true', help='continue from previous trained model with largest epoch')

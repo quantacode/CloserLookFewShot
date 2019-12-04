@@ -9,6 +9,9 @@ import os
 import glob
 import random
 import time
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
 
 import configs
 import backbone
@@ -22,27 +25,32 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file, get_best_file , get_assigned_file
 
-def feature_evaluation(cl_data_file, model, n_way = 5, n_support = 5, n_query = 15, adaptation = False):
+def feature_evaluation(cl_data_file, model, n_way = 5, n_support = 5, n_query = 15, all_perm_ids = None, select_class =
+None):
     class_list = cl_data_file.keys()
 
-    select_class = random.sample(class_list,n_way)
+    if select_class is None:
+        select_class = random.sample(class_list,n_way)
+    if all_perm_ids is None:
+        perm_flag = 0
+        all_perm_ids = []
+    else:
+        perm_flag=1
     z_all  = []
-    for cl in select_class:
+    for cli, cl in enumerate(select_class):
         img_feat = cl_data_file[cl]
-        perm_ids = np.random.permutation(len(img_feat)).tolist()
+        if not perm_flag:
+            perm_ids = np.random.permutation(len(img_feat)).tolist()
+            all_perm_ids.append(perm_ids)
+        else:
+            perm_ids = all_perm_ids[cli]
         z_all.append( [ np.squeeze( img_feat[perm_ids[i]]) for i in range(n_support+n_query) ] )     # stack each batch
 
     z_all = torch.from_numpy(np.array(z_all) )
-   
-    model.n_query = n_query
-    if adaptation:
-        scores  = model.set_forward_adaptation(z_all, is_feature = True)
-    else:
-        scores  = model.set_forward(z_all, is_feature = True)
-    pred = scores.data.cpu().numpy().argmax(axis = 1)
-    y = np.repeat(range( n_way ), n_query )
-    acc = np.mean(pred == y)*100 
-    return acc
+    z_proto = z_all[:, :n_support, :].mean(1)#.reshape(-1, z_all.shape[-1])
+    z_set = z_proto.view(-1)
+    z_set = z_set.cpu().detach().numpy()
+    return z_set, select_class,  all_perm_ids
 
 if __name__ == '__main__':
     params = parse_args('test')
@@ -51,7 +59,7 @@ if __name__ == '__main__':
 
     iter_num = 600
 
-    few_shot_params = dict(n_way = params.test_n_way , n_support = params.n_shot) 
+    few_shot_params = dict(n_way = params.test_n_way , n_support = params.n_shot)
 
     # if params.dataset in ['omniglot', 'cross_char']:
     #     assert params.model == 'Conv4' and not params.train_aug ,'omniglot only support Conv4 without augmentation'
@@ -66,11 +74,11 @@ if __name__ == '__main__':
     elif params.method == 'matchingnet':
         model           = MatchingNet( model_dict[params.model], **few_shot_params )
     elif params.method in ['relationnet', 'relationnet_softmax']:
-        if params.model == 'Conv4': 
+        if params.model == 'Conv4':
             feature_model = backbone.Conv4NP
-        elif params.model == 'Conv6': 
+        elif params.model == 'Conv6':
             feature_model = backbone.Conv6NP
-        elif params.model == 'Conv4S': 
+        elif params.model == 'Conv4S':
             feature_model = backbone.Conv4SNP
         else:
             feature_model = lambda: model_dict[params.model]( flatten = False )
@@ -100,7 +108,7 @@ if __name__ == '__main__':
 
     #modelfile   = get_resume_file(checkpoint_dir)
 
-    if not params.method in ['baseline', 'baseline++'] : 
+    if not params.method in ['baseline', 'baseline++'] :
         if params.save_iter != -1:
             modelfile   = get_assigned_file(checkpoint_dir,params.save_iter)
         else:
@@ -122,20 +130,20 @@ if __name__ == '__main__':
             if params.dataset in ['omniglot', 'cross_char']:
                 image_size = 28
             else:
-                image_size = 84 
+                image_size = 84
         else:
             image_size = 224
 
         datamgr         = SetDataManager(image_size, n_eposide = iter_num, n_query = 15 , **few_shot_params)
-        
+
         if params.dataset == 'cross':
             if split == 'base':
-                loadfile = configs.data_dir['miniImagenet'] + 'all.json' 
+                loadfile = configs.data_dir['miniImagenet'] + 'all.json'
             else:
                 loadfile   = configs.data_dir['CUB'] + split +'.json'
         elif params.dataset == 'cross_char':
             if split == 'base':
-                loadfile = configs.data_dir['omniglot'] + 'noLatin.json' 
+                loadfile = configs.data_dir['omniglot'] + 'noLatin.json'
             else:
                 loadfile  = configs.data_dir['emnist'] + split +'.json'
         else:
@@ -148,25 +156,51 @@ if __name__ == '__main__':
         acc_mean, acc_std = model.test_loop( novel_loader, return_std = True)
 
     else:
-        novel_file = os.path.join( checkpoint_dir.replace("checkpoints","features"), split_str +".hdf5") #defaut split = novel, but you can also test base or val classes
-        cl_data_file = feat_loader.init_loader(novel_file)
+        rootdir = '/home/rajshekd/projects/FSG/PRODA/features'
+        NovelF = ['omniglot/Conv4S_protonet_5way_5shot/vanila/noLatin.hdf5',
+                  'omniglot/Conv4S_protonet_5way_5shot/vanila/novel.hdf5',
+                  'cross_char/Conv4S_protonet_5way_5shot/vanila-Protonet/novel.hdf5']
+        all_z = []
+        for novel_file in NovelF:
+            all_perm_ids_iter = []
+            select_class_iter = []
+            print(novel_file)
+            # import ipdb
+            # ipdb.set_trace()
+            cl_data_file = feat_loader.init_loader(os.path.join(rootdir,novel_file))
+            for i in range(iter_num):
+                z_set, select_class, all_perm_ids = feature_evaluation(cl_data_file, model, n_query = 15)
+                all_perm_ids_iter.append(all_perm_ids)
+                select_class_iter.append(select_class)
+                all_z.append(z_set)
+        # final file
+        cl_data_file = feat_loader.init_loader(
+            os.path.join(
+                rootdir, 'cross_char/Conv4S_protonet_5way_5shot/adversarial-concatZ_domainReg-0.1_lr-0.0001_endEpoch-4000_DiscM-2FC512/novel.hdf5'))
         for i in range(iter_num):
-            acc = feature_evaluation(cl_data_file, model, n_query = 15, adaptation = params.adaptation, **few_shot_params)
-            acc_all.append(acc)
+            z_set, select_class, all_perm_ids = feature_evaluation(cl_data_file, model, n_query=15, all_perm_ids =
+            all_perm_ids_iter[i], select_class = select_class_iter[i])
+            all_z.append(z_set)
 
-        acc_all  = np.asarray(acc_all)
-        acc_mean = np.mean(acc_all)
-        acc_std  = np.std(acc_all)
-        print('%d Test Acc = %4.2f%% +- %4.2f%%' %(iter_num, acc_mean, 1.96* acc_std/np.sqrt(iter_num)))
-    with open('./record/results.txt' , 'a') as f:
-        # import ipdb
-        # ipdb.set_trace()
-        timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-        aug_str = '-aug' if params.train_aug else ''
-        aug_str += '-adapted' if params.adaptation else ''
-        if params.method in ['baseline', 'baseline++'] :
-            exp_setting = '%s-%s-%s-%s%s %sshot %sway_test' %(params.dataset, split_str, params.model, params.method, aug_str, params.n_shot, params.test_n_way )
-        else:
-            exp_setting = '%s-%s-%s-%s%s %sshot %sway_train %sway_test' %(params.dataset, split_str, params.model, params.method, aug_str , params.n_shot , params.train_n_way, params.test_n_way )
-        acc_str = '%d Test Acc = %4.2f%% +- %4.2f%%' %(iter_num, acc_mean, 1.96* acc_std/np.sqrt(iter_num))
-        f.write( 'Time: %s, Setting: %s, Acc: %s \n' %(timestamp,exp_setting,acc_str)  )
+        all_z = np.vstack(all_z)
+        print('PCA...')
+        pca = PCA(n_components=50).fit_transform(all_z)
+        print('TSNE...')
+        tsne = TSNE(n_components=2).fit_transform(pca)
+
+        # visualize
+        fig, ax = plt.subplots()
+        colors = ['gray', 'black', 'blue', 'green']
+        for i, color in enumerate(['base train', 'base test', 'novel', 'novel adapt']):
+            scat = ax.scatter(tsne[iter_num*i:iter_num*(i+1), 0], tsne[iter_num*i:iter_num*(i+1), 1], c=colors[i],
+                              label=color, alpha=0.5)
+        ax.legend()
+
+        # color = np.ones((3,600,1))
+        # scat = ax.scatter(tsne[:, 0], tsne[:, 1], c=color.squeeze(), label=[0, 1, 2], alpha=0.5)
+        # # scat = ax.scatter(tsne[:, 0], tsne[:, 1])
+        # legend1 = ax.legend(*scat.legend_elements())
+        # ax.add_artist(legend1)
+        ax.set_title('CUB (base) -> VGF (novel)')
+        plt.savefig(params.dataset+'.jpg')
+

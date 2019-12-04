@@ -249,18 +249,29 @@ class BottleneckBlock(nn.Module):
         out = self.relu(out)
         return out
 
+class Adaptive_Classifier(nn.Module):
+    def __init__(self, n_way):
+        super(Adaptive_Classifier, self).__init__()
+        # cross
+        self.fc = nn.Linear(64, n_way)
+
+    def forward(self, x):
+        out = self.fc(x)
+        return out
+
+
 class Discriminator(nn.Module):
     def __init__(self, n_way):
         super(Discriminator, self).__init__()
         # cross
         self.discriminator = nn.Sequential(
             nn.Linear(n_way*512, 4096),
-            # nn.Linear(n_way*64, 4096),
-            # nn.Linear(512, 4096),
+            # nn.Linear(2880, 4096),
+            # nn.Linear(512, 512),
             nn.ReLU(True),
-            # nn.Linear(4096, 4096),
+            # nn.Linear(512, 512),
             # nn.ReLU(True),
-            # nn.Linear(128, 128),
+            # nn.Linear(512, 512),
             # nn.ReLU(True),
 			nn.Linear(4096, 2),
         )
@@ -268,16 +279,18 @@ class Discriminator(nn.Module):
 
         # # cross_char
         # self.discriminator = nn.Sequential(
-        # 	# nn.Linear(n_way*64, 512),
-        #     nn.Linear(64, 512),
-        #     # nn.Linear(128, 512),
-        #     nn.ReLU(True),
-        #     nn.Linear(512, 512),
+        # 	nn.Linear(n_way*64, 512),
+        #     # nn.Linear(64, 128),
+        #     # nn.Linear(128, 128),
+        #     # nn.ReLU(True),
+        #     # nn.Linear(512, 512),
         #     nn.ReLU(True),
         # 	nn.Linear(512, 2),
         # )
 
     def forward(self, x):
+        # import ipdb
+        # ipdb.set_trace()
         xR = ReverseLayerF.apply(x)
         # xR = x
         out = self.discriminator(xR)
@@ -288,10 +301,22 @@ class ConvNet(nn.Module):
     def __init__(self, depth, flatten = True):
         super(ConvNet,self).__init__()
         trunk = []
+
+        # # DAN
+        # finetune_layers = []
+        # for i in range(depth):
+        #     indim = 3 if i == 0 else 64
+        #     outdim = 64
+        #     B = ConvBlock(indim, outdim, pool = ( i <4 ) ) #only pooling for fist 4 layers
+        #     trunk.append(B)
+        #     if i == depth-1:  # finetunable layers for DAN
+        #         finetune_layers.append(B)
+        # self.finetune_layers = nn.Sequential(*finetune_layers)
+
         for i in range(depth):
             indim = 3 if i == 0 else 64
             outdim = 64
-            B = ConvBlock(indim, outdim, pool = ( i <4 ) ) #only pooling for fist 4 layers
+            B = ConvBlock(indim, outdim, pool=(i < 4))  # only pooling for fist 4 layers
             trunk.append(B)
 
         if flatten:
@@ -325,6 +350,18 @@ class ConvNetS(nn.Module): #For omniglot, only 1 input channel, output dim is 64
     def __init__(self, depth, flatten = True):
         super(ConvNetS,self).__init__()
         trunk = []
+
+        # # DAN
+        # finetune_layers = []
+        # for i in range(depth):
+        #     indim = 1 if i == 0 else 64
+        #     outdim = 64
+        #     B = ConvBlock(indim, outdim, pool=(i < 4))  # only pooling for fist 4 layers
+        #     trunk.append(B)
+        #     if i == depth - 1:  # finetunable layers for DAN
+        #         finetune_layers.append(B)
+        # self.finetune_layers = nn.Sequential(*finetune_layers)
+
         for i in range(depth):
             indim = 1 if i == 0 else 64
             outdim = 64
@@ -336,7 +373,6 @@ class ConvNetS(nn.Module): #For omniglot, only 1 input channel, output dim is 64
 
         self.trunk = nn.Sequential(*trunk)
         self.final_feat_dim = 64
-
     def forward(self,x):
         out = x[:,0:1,:,:] #only use the first dimension
         out = self.trunk(out)
@@ -386,13 +422,28 @@ class ResNet(nn.Module):
         trunk = [conv1, bn1, relu, pool1]
 
         indim = 64
-        for i in range(4):
 
+        #############################################
+        # # DAN
+        # finetune_layers = []
+        # for i in range(4):
+        #
+        #     for j in range(list_of_num_layers[i]):
+        #         half_res = (i>=1) and (j==0)
+        #         B = block(indim, list_of_out_dims[i], half_res)
+        #         if i==3 : # finetunable layers for DAN
+        #             finetune_layers.append(B)
+        #         trunk.append(B)
+        #         indim = list_of_out_dims[i]
+        # self.finetune_layers = nn.Sequential(*finetune_layers)
+
+        for i in range(4):
             for j in range(list_of_num_layers[i]):
-                half_res = (i>=1) and (j==0)
+                half_res = (i >= 1) and (j == 0)
                 B = block(indim, list_of_out_dims[i], half_res)
                 trunk.append(B)
                 indim = list_of_out_dims[i]
+        #############################################
 
         if flatten:
             avgpool = nn.AvgPool2d(7)

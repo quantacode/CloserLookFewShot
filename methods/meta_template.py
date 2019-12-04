@@ -7,8 +7,15 @@ import numpy as np
 import torch.nn.functional as F
 import utils
 from abc import abstractmethod
+import operator
 import ipdb
 
+
+ADDA_BatchSize = 32
+DAN_BatchSize = 4
+# if torch.cuda.device_count() == 2:
+#     DEVICE1 = torch.device("cuda:0")
+#     DEVICE2 = torch.device("cuda:1")
 
 class MetaTemplate(nn.Module):
     def __init__(self, model_func, n_way, n_support, change_way = True, change_shots = True):
@@ -18,6 +25,9 @@ class MetaTemplate(nn.Module):
         self.n_query    = -1 #(change depends on input) 
         self.feature    = model_func()
         self.feat_dim   = self.feature.final_feat_dim
+        if (torch.cuda.device_count() > 1):
+            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            self.feature = nn.DataParallel(self.feature)
         self.change_way = change_way  #some methods allow different_way classification during training and test
 
     @abstractmethod
@@ -59,7 +69,6 @@ class MetaTemplate(nn.Module):
 
 
 
-
     def correct(self, x):       
         scores = self.set_forward(x)
         y_query = np.repeat(range( self.n_way ), self.n_query )
@@ -68,8 +77,156 @@ class MetaTemplate(nn.Module):
         topk_ind = topk_labels.cpu().numpy()
         top1_correct = np.sum(topk_ind[:,0] == y_query)
         return float(top1_correct), len(y_query)
+ 
+    def train_loop_ADDA(self, epoch, train_loaders, FES, optimizerD, optimizerG, writer):
+        print_freq = 10
+        tl_source = iter(train_loaders[0])
+        tl_target = iter(train_loaders[1])
+        num_batches = np.min([len(tl_source), len(tl_target)])
 
-    def train_loop_adversarial(self, epoch, train_loaders, optimizer, writer, params=None):
+        avg_lossD = 0
+        avg_lossG = 0
+        i=-1
+
+        while i<num_batches:
+            z_source = torch.FloatTensor([]).to(DEVICE1)
+            z_target = torch.FloatTensor([]).to(DEVICE2)
+            for _ in range(ADDA_BatchSize):
+                if i >= num_batches-1:
+                    break
+                i+=1
+                x_source, _ = next(tl_source)
+                x_target, _ = next(tl_target)
+                x_source, x_target = x_source.to(DEVICE1), x_target.to(DEVICE2)
+                # if cross_char, need to adjust the shape of target
+                x_target = x_target[:, :x_source.shape[1], :, :, :]
+                self.n_query = x_source.size(1) - self.n_support
+                if self.change_way:
+                    self.n_way = x_source.size(0)
+
+                x_source = x_source.to(DEVICE1)
+                x_source = x_source.contiguous().view(self.n_way * (self.n_support + self.n_query), *x_source.size()[2:])
+                featS = FES.forward(x_source)
+                featS = featS.view(self.n_way, self.n_support + self.n_query, -1)
+
+                ## LossD
+                _, zS = self.set_forward(featS, is_feature=True, is_adversarial=True)
+                _, zT = self.set_forward(x_target, is_adversarial=True)
+                z_source = torch.cat([z_source.to(zS.device), zS])
+                z_target = torch.cat([z_target.to(zT.device), zT])
+            if  z_source.shape[0]==0: break
+            z_all = torch.cat([z_source.to(DEVICE2), z_target])
+            logit = self.discriminator(z_all)
+            labels = torch.cat([torch.ones(z_source.shape[0], dtype=torch.long).to(DEVICE2),
+                                torch.zeros(z_target.shape[0], dtype=torch.long).to(DEVICE2)])
+            lossD = self.adv_loss_fn(logit, labels)
+            accD = 100.0*((logit[:z_source.shape[0], 0] < logit[:z_source.shape[0], 1]).sum() + \
+                   (logit[z_source.shape[0]:, 0] > logit[z_source.shape[0]:, 1]).sum()) / \
+                   (1.0 * (logit.shape[0]))
+            # logitS = self.discriminator(z_source.to(DEVICE2))
+            # logitT = self.discriminator(z_target)
+            # ls = self.adv_loss_fn(logitS, torch.ones(z_source.shape[0], dtype=torch.long).to(DEVICE2))
+            # lt = self.adv_loss_fn(logitT, torch.zeros(z_target.shape[0], dtype=torch.long).to(DEVICE2))
+            # lossD = ls + lt
+            # accD = (logitS[:, 0] < logitS[:, 1]).sum() + (logitT[:, 0] > logitT[:, 1]).sum() / \
+            #        (1.0 * (logitS.shape[0] + logitT.shape[0]))
+            if accD<70:
+                optimizerD.zero_grad()
+                lossD.backward(retain_graph=True)
+                optimizerD.step()
+
+            ## LossG
+            z_target = torch.FloatTensor([]).to(DEVICE2)
+            for _ in range(ADDA_BatchSize):
+                if i >= num_batches-1:
+                    break
+                i+=1
+                x_source, _ = next(tl_source)
+                x_target, _ = next(tl_target)
+                # if cross_char, need to adjust the shape of target
+                x_target = x_target[:, :x_source.shape[1], :, :, :]
+                _, zT = self.set_forward(x_target, is_adversarial=True)
+                z_target = torch.cat([z_target.to(zT.device), zT])
+            if  z_target.shape[0]==0: break
+            logitT = self.discriminator(z_target)
+            lossG = self.adv_loss_fn(logitT, torch.ones(z_target.shape[0], dtype=torch.long).to(DEVICE2))
+            optimizerD.zero_grad()
+            optimizerG.zero_grad()
+            lossG.backward(retain_graph=True)
+            optimizerG.step()
+
+        print('Epoch {:d} | Batch {:d}/{:d} | LossD {:f} | LossG {:f} | accD {:f}'.
+                  format(epoch, i, num_batches, lossD.item(), lossG.item(), accD))
+        # writer.add_scalar('train/loss discriminator', mean_lossD, epoch)
+        # writer.add_scalar('train/loss generator', mean_lossG, epoch)
+        # if epoch == 2:
+        #     log_images(x_source, 'train/source', epoch, writer)
+        #     log_images(x_target, 'train/target', epoch, writer)
+
+    def train_loop_DAN(self, epoch, train_loaders, optimizer, writer, params=None):
+        print_freq = 10
+        tl_source = iter(train_loaders[0])
+        tl_target = iter(train_loaders[1])
+        num_batches = np.min([len(tl_source), len(tl_target)])
+
+        bid=-1
+        avg_loss = 0
+        avg_lossP = 0
+        avg_lossAdv = 0
+        while bid<num_batches:
+            z_source = torch.FloatTensor([]).cuda()
+            z_target = torch.FloatTensor([]).cuda()
+            lossP = torch.FloatTensor([]).cuda()
+            for _ in range(DAN_BatchSize):
+                if bid >= num_batches-1:
+                    break
+                bid+=1
+                x_source, _ = next(tl_source)
+                x_target, _ = next(tl_target)
+                x_source, x_target = x_source.cuda(), x_target.cuda()
+                # if cross_char, need to adjust the shape of target
+                x_target = x_target[:, :x_source.shape[1], :, :, :]
+                self.n_query = x_source.size(1) - self.n_support
+                if self.change_way:
+                    self.n_way = x_source.size(0)
+
+                # source
+                y_query = torch.from_numpy(np.repeat(range(self.n_way), self.n_query))
+                y_query = y_query.cuda()
+                scores, zS = self.set_forward(x_source, is_adversarial=True)
+                lossP = torch.cat([lossP, self.loss_fn(scores, y_query).unsqueeze(0)])
+
+                # target
+                _, zT = self.set_forward(x_target, is_adversarial=True)
+
+                z_source = torch.cat([z_source, zS])
+                z_target = torch.cat([z_target, zT])
+
+            if z_source.shape[0] == 0: break
+            optimizer.zero_grad()
+            lossAdv = self.DAN_loss(z_source, z_target)
+            lossP = lossP.mean()
+            loss = lossP + params.gamma * lossAdv
+            loss.backward()
+            optimizer.step()
+            avg_loss = avg_loss + loss.item()
+            avg_lossP = avg_lossP + lossP.item()
+            avg_lossAdv = avg_lossAdv + lossAdv.item()
+
+        mean_loss = avg_loss / float(bid + 1)
+        mean_lossP = avg_lossP / float(bid + 1)
+        mean_lossAdv = avg_lossAdv / float(bid + 1)
+        # print(optimizer.state_dict()['param_groups'][0]['lr'])
+        print('Epoch {:d} | Batch {:d}/{:d} | total loss {:f} | LossP {:f} | Loss_adv {:f}'.
+              format(epoch, bid, num_batches, mean_loss, mean_lossP, mean_lossAdv))
+        writer.add_scalar('train/loss', mean_loss, epoch)
+        writer.add_scalar('train/loss primary', mean_lossP, epoch)
+        writer.add_scalar('train/loss adversarial', mean_lossAdv, epoch)
+        if epoch == 2:
+            log_images(x_source, 'train/source', epoch, writer)
+            log_images(x_target, 'train/target', epoch, writer)
+
+    def train_loop_PRODA(self, epoch, train_loaders, optimizer, writer, params=None):
         print_freq = 10
 
         tl_source = iter(train_loaders[0])
@@ -87,7 +244,7 @@ class MetaTemplate(nn.Module):
             # command to check: tl_source.dataset.sub_dataloader[-1].batch_sampler.sampler.num_samples
 
             # # if cross_char, need to adjust the shape of target
-            # x_target = x_target[:, :x_source.shape[1], :, :, :]
+            x_target = x_target[:, :x_source.shape[1], :, :, :]
             self.n_query = x_source.size(1) - self.n_support
 
             if self.change_way:
@@ -135,7 +292,7 @@ class MetaTemplate(nn.Module):
             self.n_query = x.size(1) - self.n_support
             optimizer.zero_grad()
 
-            loss = self.set_forward_loss( x)
+            loss = self.set_forward_loss(x)
             loss.backward()
             optimizer.step()
             avg_loss = avg_loss+loss.data.item()
@@ -156,7 +313,7 @@ class MetaTemplate(nn.Module):
         count = 0
         acc_all = []
 
-        iter_num = len(test_loader) 
+        iter_num = len(test_loader)
         for i, (x,_) in enumerate(test_loader):
             if params.n_shot_test != -1:
                 self.n_support = params.n_shot_test

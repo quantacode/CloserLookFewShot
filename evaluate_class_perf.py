@@ -5,11 +5,15 @@ import torch.nn as nn
 import torch.optim
 import json
 import torch.utils.data.sampler
+from torchvision.utils import make_grid, save_image
+from torchvision import transforms
+from PIL import Image
 import os
+import ipdb
 import glob
 import random
 import time
-
+import cv2
 import configs
 import backbone
 import data.feature_loader as feat_loader
@@ -22,27 +26,40 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from io_utils import model_dict, parse_args, get_resume_file, get_best_file , get_assigned_file
 
-def feature_evaluation(cl_data_file, model, n_way = 5, n_support = 5, n_query = 15, adaptation = False):
-    class_list = cl_data_file.keys()
-
-    select_class = random.sample(class_list,n_way)
+def feature_evaluation(cl_data_file, model, n_way = 5, n_support = 5, n_query = 15, supp=None,
+                       query=None, select_class=None):
     z_all  = []
-    for cl in select_class:
+    if query==None:
+        imgID_perCls_supp = []
+        imgID_perCls_query = []
+    else:
+        imgID_perCls_supp = supp.copy()
+        imgID_perCls_query = query.copy()
+    for cli, cl in enumerate(select_class):
         img_feat = cl_data_file[cl]
-        perm_ids = np.random.permutation(len(img_feat)).tolist()
+        if query==None:
+            perm_ids = np.random.permutation(len(img_feat)).tolist()
+            imgID_perCls_supp.append(perm_ids[:n_support])
+            imgID_perCls_query.append(perm_ids[n_support:n_support+n_query])
+        else:
+            perm_ids = []
+            perm_ids.extend(imgID_perCls_supp[cli].copy())
+            perm_ids.extend(imgID_perCls_query[cli].copy())
+
         z_all.append( [ np.squeeze( img_feat[perm_ids[i]]) for i in range(n_support+n_query) ] )     # stack each batch
 
     z_all = torch.from_numpy(np.array(z_all) )
    
     model.n_query = n_query
-    if adaptation:
-        scores  = model.set_forward_adaptation(z_all, is_feature = True)
-    else:
-        scores  = model.set_forward(z_all, is_feature = True)
+    scores  = model.set_forward(z_all, is_feature = True)
     pred = scores.data.cpu().numpy().argmax(axis = 1)
     y = np.repeat(range( n_way ), n_query )
-    acc = np.mean(pred == y)*100 
-    return acc
+    acc = np.mean(pred == y)*100
+    if query==None:
+        return acc, imgID_perCls_supp,imgID_perCls_query , select_class
+    else:
+        return acc, supp, query , select_class
+
 
 if __name__ == '__main__':
     params = parse_args('test')
@@ -148,25 +165,46 @@ if __name__ == '__main__':
         acc_mean, acc_std = model.test_loop( novel_loader, return_std = True)
 
     else:
-        novel_file = os.path.join( checkpoint_dir.replace("checkpoints","features"), split_str +".hdf5") #defaut split = novel, but you can also test base or val classes
-        cl_data_file = feat_loader.init_loader(novel_file)
-        for i in range(iter_num):
-            acc = feature_evaluation(cl_data_file, model, n_query = 15, adaptation = params.adaptation, **few_shot_params)
-            acc_all.append(acc)
+        #classes = [1, 20, 40, 60, 80]#1
+        # classes = [1, 10, 30, 50, 70]#2
+        # classes = [1, 20, 50, 80, 97]#3
+        classes = [1, 23, 53, 83, 93]#4
+        data = json.load(open('/home/rajshekd/projects/FSG/PRODA/filelists/vgg_flower/all.json'))
+        imlist = []
 
-        acc_all  = np.asarray(acc_all)
-        acc_mean = np.mean(acc_all)
-        acc_std  = np.std(acc_all)
-        print('%d Test Acc = %4.2f%% +- %4.2f%%' %(iter_num, acc_mean, 1.96* acc_std/np.sqrt(iter_num)))
-    with open('./record/results.txt' , 'a') as f:
-        # import ipdb
+
+        # adv
+        novel_file = "/home/rajshekd/projects/FSG/PRODA/features/CUB_flowers/ResNet10_protonet_aug_5way_5shot/adversarial-ConcatZ_domainReg-0.1_lr-0.0001_DiscM-4096_Base2Base/all.hdf5"
+        cl_data_file1 = feat_loader.init_loader(novel_file)
+        acc1_avg = []
+        for _ in range(600):
+            acc1, supp, query, classes = feature_evaluation(cl_data_file1, model, select_class=classes)
+            acc1_avg.append(acc1)
+        acc1_avg = np.mean(acc1_avg)
+        print ("accuracy: ",acc1_avg)
+        # vanila
+        novel_file = "/home/rajshekd/projects/FSG/PRODA/features/CUB_flowers/ResNet10_protonet_aug_5way_5shot/vanila/all.hdf5"
+        cl_data_file2 = feat_loader.init_loader(novel_file)
         # ipdb.set_trace()
-        timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-        aug_str = '-aug' if params.train_aug else ''
-        aug_str += '-adapted' if params.adaptation else ''
-        if params.method in ['baseline', 'baseline++'] :
-            exp_setting = '%s-%s-%s-%s%s %sshot %sway_test' %(params.dataset, split_str, params.model, params.method, aug_str, params.n_shot, params.test_n_way )
-        else:
-            exp_setting = '%s-%s-%s-%s%s %sshot %sway_train %sway_test' %(params.dataset, split_str, params.model, params.method, aug_str , params.n_shot , params.train_n_way, params.test_n_way )
-        acc_str = '%d Test Acc = %4.2f%% +- %4.2f%%' %(iter_num, acc_mean, 1.96* acc_std/np.sqrt(iter_num))
-        f.write( 'Time: %s, Setting: %s, Acc: %s \n' %(timestamp,exp_setting,acc_str)  )
+        acc2_avg = []
+        for _ in range(600):
+            acc2, _, _, classes = feature_evaluation(cl_data_file2, model, select_class=classes)
+            acc2_avg.append(acc2)
+        acc2_avg = np.mean(acc2_avg)
+        print("accuracy: ", acc2_avg)
+
+        # acc2, _, _, classes = feature_evaluation(cl_data_file2, model, supp=supp,
+        #                                                query=query, select_class=classes)
+
+        # visualize
+        for clsid, suppset in enumerate(supp):
+            cls = classes[clsid]
+            indices = [ind for ind,p in enumerate(data['image_labels']) if p == cls]
+            images = [cv2.imread(data['image_names'][indices[si]]) for si in suppset]
+            images = [Image.fromarray(np.uint8(img)).resize((100,100)) for img in images]
+            images = [transforms.ToTensor()(img).unsqueeze(0) for img in images]
+            imlist.extend(images)
+        save_image(torch.cat(imlist), '/home/rajshekd/projects/FSG/PRODA/record/images/support_' + str(acc1_avg)+'_'+str(
+            acc2_avg)+'.jpg',nrow=5,normalize=True)
+
+

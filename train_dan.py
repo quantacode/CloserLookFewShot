@@ -25,6 +25,7 @@ from utils import load_model, load_pretrImagenet
 def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch, params, writer):
 
     if optimization == 'Adam':
+        # optimizer = torch.optim.Adam(model.feature.module.finetune_layers.parameters(), lr=params.lr)
         optimizer = torch.optim.Adam(model.parameters(), lr=params.lr)
     else:
         raise ValueError('Unknown optimization, please define by yourself')
@@ -33,16 +34,7 @@ def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch,
 
     for epoch in range(start_epoch,stop_epoch):
         model.train()
-        if params.adversarial or params.adaptFinetune:
-            model.train_loop_PRODA(epoch, base_loader, optimizer, writer, params=params)  # model are called by
-            # reference,
-            # no need to
-        else:
-            if params.method == 'maml':
-                model.train_loop(epoch, base_loader,  optimizer) #model are called by reference,
-            else:
-                model.train_loop(epoch, base_loader,  optimizer,writer, params=params ) #model are called by reference,
-            # no need to return return
+        model.train_loop_DAN(epoch, base_loader, optimizer, writer, params=params)
         model.eval()
 
         if not os.path.isdir(params.checkpoint_dir):
@@ -67,48 +59,43 @@ def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch,
 if __name__=='__main__':
     np.random.seed(10)
     params = parse_args('train')
-    if params.adaptFinetune:
-        assert (not params.adversarial)
-
 
     if params.dataset == 'cross':
         base_file = configs.data_dir['miniImagenet'] + 'all.json'
         val_file   = configs.data_dir['CUB'] + 'val.json'
-        if params.adversarial or params.adaptFinetune:
-            # novel_file  = configs.data_dir['CUB'] + 'novel' +'.json'
-            novel_file  = configs.data_dir['CUB'] + 'base' +'.json'
+        # novel_file  = configs.data_dir['CUB'] + 'novel' +'.json'
+        novel_file  = configs.data_dir['CUB'] + 'base' +'.json'
     elif params.dataset == 'cross_char':
         base_file = configs.data_dir['omniglot'] + 'noLatin.json'
         val_file   = configs.data_dir['emnist'] + 'val.json'
-        if params.adversarial or params.adaptFinetune:
-            novel_file  = configs.data_dir['emnist'] + 'novel' +'.json'
-    elif params.dataset == 'flowers_CUB':
-        base_file = configs.data_dir['flowers'] + 'all.json'
-        val_file   = configs.data_dir['CUB'] + 'val.json'
-        if params.adversarial:
-            # novel_file  = configs.data_dir['CUB'] + 'novel' +'.json'
-            novel_file  = configs.data_dir['CUB'] + 'base' +'.json'
-    elif params.dataset == 'CUB_flowers':
-        base_file = configs.data_dir['CUB'] + 'base.json'
-        val_file   = configs.data_dir['flowers'] + 'val.json'
-        if params.adversarial:
-            # novel_file  = configs.data_dir['flowers'] + 'base_novel.json'
-            novel_file  = configs.data_dir['flowers'] + 'base.json'
-    elif params.dataset == 'miniImagenet_flowers':
-        base_file = configs.data_dir['miniImagenet'] + 'all.json'
-        val_file   = configs.data_dir['flowers'] + 'val.json'
-        if params.adversarial:
-            novel_file  = configs.data_dir['flowers'] + 'base_novel.json'
-    elif params.dataset == 'product_clipart':
-        base_file = configs.data_dir['officeProduct'] + 'base_novel.json'
-        val_file   = configs.data_dir['officeClipart'] + 'val.json'
-        if params.adversarial:
-            novel_file  = configs.data_dir['officeClipart'] + 'base_novel.json'
-    else:
-        base_file = configs.data_dir[params.dataset] + 'base.json'
-        val_file   = configs.data_dir[params.dataset] + 'val.json'
-        if params.adversarial:
-            novel_file  = configs.data_dir[params.dataset] + 'novel.json'
+        novel_file  = configs.data_dir['emnist'] + 'novel' +'.json'
+    # elif params.dataset == 'flowers_CUB':
+    #     base_file = configs.data_dir['flowers'] + 'all.json'
+    #     val_file   = configs.data_dir['CUB'] + 'val.json'
+    #     if params.adversarial:
+    #         # novel_file  = configs.data_dir['CUB'] + 'novel' +'.json'
+    #         novel_file  = configs.data_dir['CUB'] + 'base' +'.json'
+    # elif params.dataset == 'CUB_flowers':
+    #     base_file = configs.data_dir['CUB'] + 'base.json'
+    #     val_file   = configs.data_dir['flowers'] + 'val.json'
+    #     if params.adversarial:
+    #         # novel_file  = configs.data_dir['flowers'] + 'base_novel.json'
+    #         novel_file  = configs.data_dir['flowers'] + 'base.json'
+    # elif params.dataset == 'miniImagenet_flowers':
+    #     base_file = configs.data_dir['miniImagenet'] + 'all.json'
+    #     val_file   = configs.data_dir['flowers'] + 'val.json'
+    #     if params.adversarial:
+    #         novel_file  = configs.data_dir['flowers'] + 'base_novel.json'
+    # elif params.dataset == 'product_clipart':
+    #     base_file = configs.data_dir['officeProduct'] + 'base_novel.json'
+    #     val_file   = configs.data_dir['officeClipart'] + 'val.json'
+    #     if params.adversarial:
+    #         novel_file  = configs.data_dir['officeClipart'] + 'base_novel.json'
+    # else:
+    #     base_file = configs.data_dir[params.dataset] + 'base.json'
+    #     val_file   = configs.data_dir[params.dataset] + 'val.json'
+    #     if params.adversarial:
+    #         novel_file  = configs.data_dir[params.dataset] + 'novel.json'
 
     if 'Conv' in params.model:
         if params.dataset in ['omniglot', 'cross_char', 'flowers', 'flowers_CUB']:
@@ -173,14 +160,13 @@ if __name__=='__main__':
             params.n_shot_test =  params.n_shot
         else: # modify target loader support
             train_few_shot_params['n_support'] = params.n_shot_test
-        if params.adversarial or params.adaptFinetune:
-            target_datamgr = SetDataManager(image_size, n_query = n_query,  **train_few_shot_params)
-            target_loader = target_datamgr.get_data_loader(novel_file , aug = False)
-            # ipdb.set_trace()
-            # bl, tl = iter(base_loader), iter(target_loader)
-            # bx, _ = next(bl)
-            # tx, _ = next(tl)
-            base_loader = [base_loader, target_loader]
+        target_datamgr = SetDataManager(image_size, n_query = n_query,  **train_few_shot_params)
+        target_loader = target_datamgr.get_data_loader(novel_file , aug = False)
+        # ipdb.set_trace()
+        # bl, tl = iter(base_loader), iter(target_loader)
+        # bx, _ = next(bl)
+        # tx, _ = next(tl)
+        base_loader = [base_loader, target_loader]
 
 
         test_few_shot_params     = dict(n_way = params.test_n_way, n_support = params.n_shot_test)
@@ -189,15 +175,7 @@ if __name__=='__main__':
         #a batch for SetDataManager: a [n_way, n_support + n_query, dim, w, h] tensor        
 
         if params.method == 'protonet':
-            if params.adversarial:
-                model = ProtoNet( model_dict[params.model], params.test_n_way, params.n_shot, discriminator =
-                backbone.Disc_model(params.train_n_way), cosine=params.cosine)
-            elif params.adaptFinetune:
-                assert (params.adversarial==False)
-                model = ProtoNet(model_dict[params.model], params.test_n_way, params.n_shot, adaptive_classifier =
-                backbone.Adaptive_Classifier(params.train_n_way), cosine=params.cosine)
-            else:
-                model = ProtoNet(model_dict[params.model], params.test_n_way, params.n_shot, cosine=params.cosine)
+            model = ProtoNet( model_dict[params.model], params.test_n_way, params.n_shot)
         elif params.method == 'matchingnet':
             model           = MatchingNet( model_dict[params.model], **train_few_shot_params )
         elif params.method in ['relationnet', 'relationnet_softmax']:

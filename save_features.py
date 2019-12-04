@@ -60,9 +60,11 @@ if __name__ == '__main__':
     if params.dataset == 'cross':
         if split == 'base':
             # loadfile = configs.data_dir['miniImagenet'] + 'all.json'
-            loadfile = configs.data_dir['CUB'] + 'base.json'
+            # loadfile = configs.data_dir['CUB'] + 'base.json'
+            loadfile = configs.data_dir['miniImagenet'] + 'base.json'
         else:
-            loadfile   = configs.data_dir['CUB'] + split +'.json' 
+            loadfile   = configs.data_dir['CUB'] + split +'.json'
+            # loadfile   = configs.data_dir['miniImagenet'] + split +'.json'
     elif params.dataset == 'cross_char':
         if split == 'base':
             loadfile = configs.data_dir['omniglot'] + 'noLatin.json'
@@ -119,9 +121,19 @@ if __name__ == '__main__':
     state = tmp['state']
     state_keys = list(state.keys())
     for i, key in enumerate(state_keys):
-        if "feature." in key:
-            newkey = key.replace("feature.","")  # an architecture model has attribute 'feature', load architecture feature to backbone by casting name from 'feature.trunk.xx' to 'trunk.xx'  
+        if "feature.module." in key:
+            newkey = key.replace("feature.module.","")  # an architecture model has attribute 'feature',
+            # load architecture feature to backbone by casting name from 'feature.trunk.xx' to 'trunk.xx'
             state[newkey] = state.pop(key)
+        elif "feature." in key:
+            newkey = key.replace("feature.","")  # an architecture model has attribute 'feature',
+            # load architecture feature to backbone by casting name from 'feature.trunk.xx' to 'trunk.xx'
+            state[newkey] = state.pop(key)
+        elif "feat_extr." in key:
+            newkey = key.replace("feat_extr.","")  # an architecture model has attribute 'feature',
+            # load architecture feature to backbone by casting name from 'feature.trunk.xx' to 'trunk.xx'
+            state[newkey] = state.pop(key)
+
         else:
             state.pop(key)
             
@@ -131,4 +143,5 @@ if __name__ == '__main__':
     dirname = os.path.dirname(outfile)
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
+    # ipdb.set_trace()
     save_features(model, data_loader, outfile)

@@ -7,19 +7,29 @@ from torch.autograd import Variable
 import numpy as np
 import torch.nn.functional as F
 from methods.meta_template import MetaTemplate
+from utils import guassian_kernel
 import ipdb
 
+# if torch.cuda.device_count() == 2:
+#     DEVICE1 = torch.device("cuda:0")
+#     DEVICE2 = torch.device("cuda:1")
+
 class ProtoNet(MetaTemplate):
-    def __init__(self, model_func, n_way, n_support, discriminator=None, cosine=False):
+    def __init__(self, model_func, n_way, n_support, discriminator=None, cosine=False, adaptive_classifier=None):
         super(ProtoNet, self).__init__(model_func,  n_way, n_support)
         self.loss_fn = nn.CrossEntropyLoss()
         self.adv_loss_fn = nn.CrossEntropyLoss()
-        self.discriminator = discriminator
+        if (discriminator is not None):
+            self.discriminator = discriminator
+            if   (torch.cuda.device_count() > 1):
+                print("Let's use", torch.cuda.device_count(), "GPUs!")
+                self.discriminator = nn.DataParallel(self.discriminator)
+        self.adaptive_classifier = adaptive_classifier
         self.cosine_dist = cosine
         if self.cosine_dist: self.temperature = 10
 
 
-    def set_forward(self,x,is_feature = False , is_adversarial=False):
+    def set_forward(self,x,is_feature = False , is_adversarial=False, is_adaptFinetune = False):
         z_support, z_query  = self.parse_feature(x,is_feature)
 
         z_support = z_support.contiguous()
@@ -44,6 +54,10 @@ class ProtoNet(MetaTemplate):
             # z_set = z_support[:, torch.randint(z_support.shape[1], (1,)).item(), :].reshape(-1).unsqueeze(0)
 
             return scores, z_set
+        elif is_adaptFinetune:
+            assert (is_adversarial==False)
+            y = torch.range(0,self.n_way-1).unsqueeze(1).type(torch.long).repeat(1, self.n_way)
+            return scores, z_support.view(self.n_way*self.n_support, -1), y.view(self.n_way*self.n_support)
         else:
             return scores
 
@@ -53,6 +67,7 @@ class ProtoNet(MetaTemplate):
         ls = adv_loss_fn(logitS, torch.ones(zS.shape[0], dtype=torch.long).cuda())
         lt = adv_loss_fn(logitT, torch.zeros(zT.shape[0], dtype=torch.long).cuda())
         loss = ls+lt
+        # return loss
 
         # SPL: reweighting of loss
         corr = torch.dot((zS / torch.norm(zS)).squeeze(), (zT / torch.norm(zT)).squeeze()).unsqueeze(0)
@@ -63,7 +78,6 @@ class ProtoNet(MetaTemplate):
         # corr = torch.dot((zS/torch.norm(zS)).squeeze(), (zT/torch.norm(zT)).squeeze()).unsqueeze(0)
         # scale = epoch/50.0
         # wt = torch.norm(F.tanh(scale*corr))
-
 
         ## PaIR
 
@@ -80,7 +94,27 @@ class ProtoNet(MetaTemplate):
         # wt = torch.norm(F.tanh(scale*corr))
 
         return wt*loss
-        # return loss
+
+
+    def DAN_loss(self, source, target, kernel_mul=2.0, kernel_num=5, fix_sigma=None):
+        batch_size = int(source.size()[0])
+        kernels = guassian_kernel(source, target,
+                                  kernel_mul=kernel_mul, kernel_num=kernel_num, fix_sigma=fix_sigma)
+
+        loss1 = 0
+        for s1 in range(batch_size):
+            for s2 in range(s1 + 1, batch_size):
+                t1, t2 = s1 + batch_size, s2 + batch_size
+                loss1 += kernels[s1, s2] + kernels[t1, t2]
+        loss1 = loss1 / float(batch_size * (batch_size - 1) / 2)
+
+        loss2 = 0
+        for s1 in range(batch_size):
+            for s2 in range(batch_size):
+                t1, t2 = s1 + batch_size, s2 + batch_size
+                loss2 -= kernels[s1, t2] + kernels[s2, t1]
+        loss2 = loss2 / float(batch_size * batch_size)
+        return loss1 + loss2
 
     def set_forward_loss(self, xS, xT=None, params = None, epoch=None):
         y_query = torch.from_numpy(np.repeat(range( self.n_way ), self.n_query ))
@@ -90,16 +124,26 @@ class ProtoNet(MetaTemplate):
         scores, z_source = self.set_forward(xS, is_adversarial=True)
         proto_loss = self.loss_fn(scores, y_query )
 
-        if self.discriminator is not None:
-            if params:
+        # if self.discriminator is no[t None:
+        if params is not None:
+            if params.adversarial:
                 if params.n_shot_test != -1: self.n_support=params.n_shot_test
-            _, z_target = self.set_forward(xT, is_adversarial=True)
-            adverasrial_loss = self.discriminator_score(z_source, z_target, self.adv_loss_fn, epoch)
-            domain_reg = 1.0
-            loss = proto_loss + domain_reg*adverasrial_loss
-            return loss, proto_loss, adverasrial_loss
+                _, z_target = self.set_forward(xT, is_adversarial=True)
+                adverasrial_loss = self.discriminator_score(z_source, z_target, self.adv_loss_fn, epoch)
+                domain_reg = params.gamma
+                loss = proto_loss + domain_reg*adverasrial_loss
+                return loss, proto_loss, adverasrial_loss
+            elif params.adaptFinetune:
+                assert (params.adversarial==False)
+                _, z_target, y_target = self.set_forward(xT, is_adaptFinetune = True)
+                logitT = self.adaptive_classifier(z_target)
+                adaptive_loss = self.adv_loss_fn(logitT, y_target.cuda())
+                adaptive_wt = 1.0
+                loss = proto_loss + adaptive_wt*adaptive_loss
+                return loss, proto_loss, adaptive_loss
         else:
             return proto_loss
+
 
 
 def euclidean_dist( x, y):
