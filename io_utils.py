@@ -9,6 +9,7 @@ model_dict = dict(
             Conv4S = backbone.Conv4S,
             Conv6 = backbone.Conv6,
             ResNet10 = backbone.ResNet10,
+            ResNet12 = backbone.ResNet12,
             ResNet18 = backbone.ResNet18,
             ResNet18_plus = backbone.ResNet18_plus,
             ResNet34 = backbone.ResNet34,
@@ -55,6 +56,8 @@ def parse_args(script):
         parser.add_argument('--split'       , default='novel', help='base/val/novel') #default novel, but you can also test base/val class accuracy if you want 
         parser.add_argument('--save_iter', default=-1, type=int,help ='saved feature from the model trained in x epoch, use the best model if x is -1')
         parser.add_argument('--adaptation'  , action='store_true', help='further adaptation in test time or not')
+    elif script=='kMeans_clustering':
+        parser.add_argument('--supervision' , default='None', type=str, help='tUn vs Semi supervised')
     else:
        raise ValueError('Unknown script')
         

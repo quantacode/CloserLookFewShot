@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     acc_all = []
 
-    iter_num = 600
+    iter_num = 1000
 
     few_shot_params = dict(n_way = params.test_n_way , n_support = params.n_shot) 
 
@@ -151,7 +151,8 @@ if __name__ == '__main__':
         novel_file = os.path.join( checkpoint_dir.replace("checkpoints","features"), split_str +".hdf5") #defaut split = novel, but you can also test base or val classes
         cl_data_file = feat_loader.init_loader(novel_file)
         for i in range(iter_num):
-            acc = feature_evaluation(cl_data_file, model, n_query = 15, adaptation = params.adaptation, **few_shot_params)
+            acc = feature_evaluation(cl_data_file, model, n_query = 16, adaptation = params.adaptation,
+                                     **few_shot_params)
             acc_all.append(acc)
 
         acc_all  = np.asarray(acc_all)

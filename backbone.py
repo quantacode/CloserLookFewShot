@@ -266,6 +266,7 @@ class Discriminator(nn.Module):
         # cross
         self.discriminator = nn.Sequential(
             nn.Linear(n_way*512, 4096),
+            # nn.Linear(3200, 4096), # ResNet12
             # nn.Linear(2880, 4096),
             # nn.Linear(512, 512),
             nn.ReLU(True),
@@ -497,6 +498,9 @@ def Conv4SNP():
 
 def ResNet10( flatten = True):
     return ResNet(SimpleBlock, [1,1,1,1],[64,128,256,512], flatten)
+
+def ResNet12( flatten = True):
+    return ResNet(SimpleBlock, [1,1,2,1],[64,160,320,640], flatten)
 
 def ResNet18( flatten = True):
     return ResNet(SimpleBlock, [2,2,2,2],[64,128,256,512], flatten)

@@ -70,14 +70,21 @@ if __name__ == '__main__':
             loadfile = configs.data_dir['omniglot'] + 'noLatin.json'
         else:
             loadfile = configs.data_dir['emnist'] + split + '.json'
-    elif params.dataset == 'CUB_flowers' or params.dataset == 'miniImagenet_flowers':
+    elif params.dataset == 'CUB_flowers' or  params.dataset == 'miniImagenet_flowers' or \
+        params.dataset ==  'mIN-CUB_flowers' or\
+        params.dataset ==  'CUB-P_flowers' or\
+        params.dataset ==  'CUB-P-mIN_flowers' or\
+        params.dataset ==  'CUB-cART_flowers' or\
+        params.dataset ==  'CUB-cART-mIN_flowers' or\
+        params.dataset ==  'CUB-cART-P_flowers' :
+        
         loadfile = configs.data_dir['flowers'] + split + '.json'
-    elif params.dataset == 'flowers_CUB':
+    elif params.dataset == 'flowers_CUB' or params.dataset == 'mIN-flowers_CUB' or params.dataset == 'multi_CUB':
         loadfile   = configs.data_dir['CUB'] + split +'.json'
     elif params.dataset == 'product_clipart':
         loadfile   = configs.data_dir['officeClipart'] + split +'.json'
-    else:
-        loadfile = configs.data_dir[params.dataset] + split + '.json'
+    elif params.dataset == 'sanCars_cars':
+        loadfile = configs.data_dir['cars'] + split + '.json'
     print("evaluating on : ", loadfile)
 
     checkpoint_dir = '%s/checkpoints/%s/%s_%s' %(configs.save_dir, params.dataset, params.model, params.method)

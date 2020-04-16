@@ -57,7 +57,6 @@ class MetaTemplate(nn.Module):
                 # n_way, n_rest = x.size()[:2]
                 # x = x.contiguous().view( -1, *x.size()[2:])
             except:
-                import ipdb
                 ipdb.set_trace()
             z_all = self.feature.forward(x)
             z_all = z_all.view( self.n_way, self.n_support + self.n_query, -1)

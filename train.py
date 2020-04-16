@@ -20,7 +20,7 @@ from methods.relationnet import RelationNet
 from methods.maml import MAML
 from tensorboardX import SummaryWriter
 from io_utils import model_dict, parse_args, get_resume_file
-from utils import load_model, load_pretrImagenet
+from utils import load_model, load_pretrImagenet, load_baselinePP
 
 def train(base_loader, val_loader, model, optimization, start_epoch, stop_epoch, params, writer):
 
@@ -73,7 +73,7 @@ if __name__=='__main__':
 
     if params.dataset == 'cross':
         base_file = configs.data_dir['miniImagenet'] + 'all.json'
-        val_file   = configs.data_dir['CUB'] + 'val.json'
+        val_file = configs.data_dir['CUB'] + 'val.json'
         if params.adversarial or params.adaptFinetune:
             # novel_file  = configs.data_dir['CUB'] + 'novel' +'.json'
             novel_file  = configs.data_dir['CUB'] + 'base' +'.json'
@@ -104,6 +104,25 @@ if __name__=='__main__':
         val_file   = configs.data_dir['officeClipart'] + 'val.json'
         if params.adversarial:
             novel_file  = configs.data_dir['officeClipart'] + 'base_novel.json'
+    elif params.dataset=='mIN-flowers_CUB' or\
+        params.dataset=='mIN-CUB_flowers' or\
+        params.dataset=='multi_CUB' or \
+        params.dataset=='sanCars_cars' or\
+        params.dataset=='miniImagenet_cars' or \
+        params.dataset=='CUB-P_flowers' or \
+        params.dataset=='CUB-cART_flowers' or \
+        params.dataset=='CUB-P-mIN_flowers' or \
+        params.dataset=='CUB-cART-mIN_flowers' or\
+        params.dataset=='CUB-cART-P_flowers':
+
+        base_domain, novel_domain = params.dataset.split('_')
+        base_file = configs.data_dir[base_domain] + 'base.json'
+        val_file = configs.data_dir[base_domain] + 'val.json'
+        # val_file = configs.data_dir[novel_domain] + 'val.json'
+        if params.adversarial:
+            # change val file
+            val_file = configs.data_dir[novel_domain] + 'val.json'
+            novel_file = configs.data_dir[novel_domain] + 'base.json'
     else:
         base_file = configs.data_dir[params.dataset] + 'base.json'
         val_file   = configs.data_dir[params.dataset] + 'val.json'
@@ -208,10 +227,15 @@ if __name__=='__main__':
             elif params.model == 'Conv4S':
                 feature_model = backbone.Conv4SNP
             else:
-                feature_model = lambda: model_dict[params.model]( flatten = False )
+                # feature_model = lambda: model_dict[params.model]( flatten = False )
+                feature_model = model_dict[params.model]
             loss_type = 'mse' if params.method == 'relationnet' else 'softmax'
 
-            model           = RelationNet( feature_model, loss_type = loss_type , **train_few_shot_params )
+            if params.adversarial:
+                model = RelationNet(feature_model, loss_type=loss_type, discriminator =
+                backbone.Disc_model(params.train_n_way), **train_few_shot_params)
+            else:
+                model           = RelationNet( feature_model, loss_type = loss_type , **train_few_shot_params )
         elif params.method in ['maml' , 'maml_approx']:
             backbone.ConvBlock.maml = True
             backbone.SimpleBlock.maml = True
@@ -224,8 +248,11 @@ if __name__=='__main__':
                 model.train_lr = 0.1
         # pre_train or warm start
         if params.load_modelpth:
+            # ipdb.set_trace()
             if 'pretrained-imagenet' in params.load_modelpth:
                 model = load_pretrImagenet(model, params.load_modelpth)
+            elif ('baseline++' in params.load_modelpth or 'ImgNetPretr' in params.load_modelpth):
+                model = load_baselinePP(model, params.load_modelpth)
             else:
                 model = load_model(model, params.load_modelpth)
             print('preloading: ', params.load_modelpth)

@@ -14,6 +14,7 @@ class SimpleDataset:
             self.meta = json.load(f)
         self.transform = transform
         self.target_transform = target_transform
+        self.imgs = [(img, target) for img, target in zip(self.meta['image_names'], self.meta['image_names'])]
 
 
     def __getitem__(self,i):
@@ -25,6 +26,18 @@ class SimpleDataset:
 
     def __len__(self):
         return len(self.meta['image_names'])
+
+class NamedDataset(SimpleDataset):
+    def __init__(self, data_file, transform, target_transform=identity):
+        super(NamedDataset, self).__init__(data_file, transform, target_transform=target_transform)
+
+    def __getitem__(self,i):
+        img_name = self.meta['image_names'][i]
+        image_path = os.path.join(img_name)
+        img = Image.open(image_path).convert('RGB')
+        img = self.transform(img)
+        target = self.target_transform(self.meta['image_labels'][i])
+        return img_name, img, target
 
 
 class SetDataset:

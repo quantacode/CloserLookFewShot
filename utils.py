@@ -33,8 +33,22 @@ def sparsity(cl_data_file):
 def load_model(model, loadpth):
     model_state_dict = model.state_dict()
     pretr_dict = torch.load(loadpth)['state']
-    pretr_dict = {k: v for k, v in pretr_dict.items() if k in model_state_dict}
-    # pretr_dict = {k.replace('feature.','feature.module.'): v for k, v in pretr_dict.items() if k.replace('feature.','feature.module.') in model_state_dict}
+    if 'module' in list(pretr_dict.keys())[0]:
+        pretr_dict = {k: v for k, v in pretr_dict.items() if k in model_state_dict}
+    else:
+        pretr_dict = {k.replace('feature.','feature.module.'): v for k, v in pretr_dict.items() if k.replace('feature.','feature.module.') in model_state_dict}
+    model_state_dict.update(pretr_dict)
+    model.load_state_dict(model_state_dict)
+    return model
+
+def load_baselinePP(model, loadpth):
+    model_state_dict = model.state_dict()
+    pretr_dict = torch.load(loadpth)['state']
+    if 'module' in list(model_state_dict.keys())[0]:
+        pretr_dict = {k.replace('feature.', 'feature.module.'): v for k, v in pretr_dict.items() if
+                      k.replace('feature.', 'feature.module.') in model_state_dict}
+    else:
+        pretr_dict = {k: v for k, v in pretr_dict.items() if k in model_state_dict}
     model_state_dict.update(pretr_dict)
     model.load_state_dict(model_state_dict)
     return model

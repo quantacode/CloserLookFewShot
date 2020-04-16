@@ -150,24 +150,24 @@ source ~/torch/bin/activate
 ## no-adapt
 #python ./train.py --train_aug \
 #--dataset cross \
-#--model ResNet34 \
+#--model ResNet12 \
 #--method protonet \
 #--stop_epoch 10000 \
 #--lr 0.001 \
-#--exp_id 'vanila'
+#--exp_id 'vanila_val-CUB'
 ##--load_modelpth '/home/rajshekd/projects/FSG/CloserLookFewShot/checkpoints/pretrained-imagenet/model.tar' \
 
 ##adversarial
 #python ./train.py --train_aug \
 #--dataset cross \
-#--model ResNet18 \
+#--model ResNet12 \
 #--method protonet \
 #--stop_epoch 10000 \
 #--lr 0.00001 \
 #--adversarial \
-#--gamma 1.0 \
-#--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/cross/ResNet18_protonet_aug_5way_5shot/vanila_pretrain-Imagenet/best_model.tar' \
-#--exp_id 'adversarial-ConcatZ_domainReg-1.0_lr-0.00001_DiscM-4096_base2base_SPL'
+#--gamma 0.1 \
+#--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/cross/ResNet12_protonet_aug_5way_5shot/vanila_val-CUB/best_model.tar' \
+#--exp_id 'adversarial-ConcatZ_domainReg-0.1_lr-0.00001_DiscM-4096_base2base_SPL'
 
 ### Adaptation by Finetuning ###
 ## few-shot
@@ -257,7 +257,61 @@ source ~/torch/bin/activate
 #--load_modelpth '/home/rajshekd/projects/FSG/CloserLookFewShot/checkpoints/product_clipart/ResNet18_protonet_aug_5way_5shot/vanila_pretrain-Imagenet/best_model.tar' \
 #--exp_id 'adversarial-ConcatZ_domainReg-1.0_lr-0.0001_DiscM-4096_SPL'
 
-################################## ADDA #############################################
+
+################################## Mixture datasets #############################################
+############# mIN+VGF -> CUB, mIN+CUB -> VGF  ########
+## no-adapt
+#python ./train.py --train_aug \
+#--dataset CUB-cART-P_flowers \
+#--model ResNet18 \
+#--method protonet \
+#--stop_epoch 10000 \
+#--lr 0.001 \
+#--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/pretrained-imagenet/model.tar' \
+#--exp_id 'vanila_ImgNetPretr'
+
+##adversarial
+#python ./train.py --train_aug \
+#--dataset CUB-cART-P_flowers \
+#--model ResNet18 \
+#--method protonet \
+#--stop_epoch 10000 \
+#--lr 0.00001 \
+#--adversarial \
+#--gamma 1.0 \
+#--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/CUB-cART-P_flowers/ResNet18_protonet_aug_5way_5shot/vanila_ImgNetPretr/best_model.tar' \
+#--exp_id 'PRALIGN_domainReg-1.0'
+
+############# multi -> CUB, sanCars -> cars ########
+## no-adapt
+#python ./train.py --train_aug \
+#--dataset miniImagenet_cars \
+#--model ResNet18 \
+#--method protonet \
+#--stop_epoch 10000 \
+#--lr 0.001 \
+#--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/pretrained-imagenet/model.tar' \
+#--exp_id 'vanila-ImgNetPretr'
+##--load_modelpth '/home/rajshekd/projects/FSG/CrossDomainFewShot/output/checkpoints/baseline++_resnet18/399.tar' \
+##--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/multi_CUB/ResNet18_protonet_aug_5way_5shot/vanila_ImgNetPretr/800.tar' \
+##--load_modelpth '/home/rajshekd/projects/FSG/CrossDomainFewShot/output/checkpoints/baseline/399.tar' \
+
+##adversarial
+#python ./train.py --train_aug \
+#--dataset multi_CUB \
+#--model ResNet18 \
+#--method protonet \
+#--stop_epoch 10000 \
+#--lr 0.00001 \
+#--adversarial \
+#--gamma 1.0 \
+#--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/multi_CUB/ResNet18_protonet_aug_5way_5shot/vanila_ImgNetPretr_baseval/best_model.tar' \
+#--exp_id 'Pralign_domainReg-1.0_pretrained-ImgNetPretr'
+
+
+
+################################## Other DA methods #############################################
+## ADDA
 #python ./train_adda.py --train_aug \
 #--dataset cross \
 #--model ResNet18 \
@@ -277,7 +331,7 @@ source ~/torch/bin/activate
 #--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/cross_char/Conv4_protonet_5way_1shot/vanila/best_model.tar' \
 #--exp_id 'ADDA_disc-512'
 
-################################## DAN #############################################
+## DAN
 #python ./train_dan.py --train_aug \
 #--dataset cross \
 #--model ResNet18 \
@@ -299,15 +353,22 @@ source ~/torch/bin/activate
 #--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/cross_char/Conv4_protonet_5way_1shot/vanila/best_model.tar' \
 #--exp_id 'DAN_advLossWt-1.0'
 
-############################### EVALUATE #############################################
-#python save_features.py --train_aug --dataset CUB_flowers --model ResNet10 --method protonet --n_shot 5 --split all \
-#--exp_id 'vanila'
+############################### Cluster Novel Domains #############################################
+########### Unsupervised ###############
+#python ./kMeans_clustering.py.py --dataset emnist \
+#--supervision 'None' \
+#--model ResNet18 \
+#--load_modelpth '/home/rajshekd/projects/FSG/PRODA/checkpoints/pretrained-imagenet/model.tar'
 
-#python test.py --train_aug --dataset flowers_CUB --model ResNet10 --method protonet --n_shot 5 --split novel \
-#--exp_id 'adversarial-ConcatZ_domainReg-0.1_lr-0.0001_DiscM-4096_Base2Base_SPL'
+############################### EVALUATE #############################################
+python save_features.py --train_aug --dataset multi_CUB --model ResNet18 --method protonet --n_shot 5 --split novel \
+--exp_id 'Pralign_domainReg-1.0_pretrained-BaselinePP'
+#
+python test.py --train_aug --dataset multi_CUB --model ResNet18 --method protonet --n_shot 5 --split novel \
+--exp_id 'Pralign_domainReg-1.0_pretrained-BaselinePP'
 
 #################################### VISUALIZE #############################################
 #python visualize_domains.py --dataset cross_char --model Conv4S --method protonet --n_shot 5 --split novel
 
-python evaluate_class_perf.py --train_aug --dataset CUB_flowers --model ResNet10 --method protonet --n_shot 5 --split all \
---exp_id 'adversarial-ConcatZ_domainReg-0.1_lr-0.0001_DiscM-4096_Base2Base'
+#python evaluate_class_perf.py --train_aug --dataset CUB_flowers --model ResNet10 --method protonet --n_shot 5 --split all \
+#--exp_id 'adversarial-ConcatZ_domainReg-0.1_lr-0.0001_DiscM-4096_Base2Base'
